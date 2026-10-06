@@ -989,7 +989,7 @@ const SEMENTE = {
 /* =========================================================
    CONSTANTES
    ========================================================= */
-const VERSAO = 'v2.9.0';
+const VERSAO = 'v2.10.0';
 // bibliotecas guardadas no próprio repositório (funcionam sem internet)
 const URL_ZXING = 'lib/zxing.min.js';
 const URL_JSPDF = 'lib/jspdf.umd.min.js';
@@ -1966,12 +1966,14 @@ function abrirConferenciaComEstado(st){
         ${rep ? `<div class="aviso perigo">Parece que esta nota já foi lançada (${esc(rep.mercado)}, ${fmtData(rep.finalizadaEm)}, ${fmt(rep.total)}).</div>` : ''}
         <div class="contagem" style="margin-top:12px">Toque num item para corrigir ou ligar a um produto cadastrado.</div>
         <div>${linhas}</div>
-        <div class="contagem" style="margin-top:12px">Os itens vão para o carrinho da lista, já comprados, com quantidade e preço${nl ? `. ${nl === 1 ? 'O item que já estava na lista é atualizado' : `Os ${nl} itens que já estavam na lista são atualizados`}` : ''}.</div>
-        <div class="sheet-acoes"><button class="btn pri" data-a="nota-salvar">Lançar no carrinho (${fmt(k.lancar)})</button></div>`;
+        ${nl ? `<div class="cfg-linha" style="margin-top:12px"><label class="sw" style="flex:1;justify-content:space-between">Tirar da lista ${nl === 1 ? 'o item que veio' : `os ${nl} itens que vieram`} na nota (já ${nl === 1 ? 'comprado' : 'comprados'})<input type="checkbox" id="nTirar" ${st.tirarDaLista !== false ? 'checked' : ''}><span></span></label></div>` : ''}
+        <div class="contagem" style="margin-top:12px">A compra vai direto para o histórico, com a data da nota. Sua lista não muda${nl ? ', a não ser pelos itens que você pedir para tirar' : ''}.</div>
+        <div class="sheet-acoes"><button class="btn pri" data-a="nota-salvar">Lançar compra (${fmt(k.lancar)})</button></div>`;
     },
     montar(el){
       ligarCampoLugar(el, 'nLoja', v => { st.loja = v; st.lojaAuto = false; guardarRascunhoNota(st); }, v => { st.loja = v; st.lojaAuto = false; guardarRascunhoNota(st); });
       el.querySelector('#nData').addEventListener('change', e => { st.data = e.target.value ? dataNota(e.target.value) : ''; mostrarSheet(); });
+      const tirar = el.querySelector('#nTirar'); if (tirar) tirar.addEventListener('change', () => { st.tirarDaLista = tirar.checked; guardarRascunhoNota(st); });
       el.querySelector('#nNum').addEventListener('input', e => { st.numero = e.target.value.replace(/\D/g, '').slice(0, 9); guardarRascunhoNota(st); });
       el.querySelector('#nSerie').addEventListener('input', e => { st.serie = e.target.value.replace(/\D/g, '').slice(0, 3); guardarRascunhoNota(st); });
       el.querySelector('#nDescGeral').addEventListener('change', e => { const n = parseNum(e.target.value); st.descontoGeral = n > 0 ? r2(n) : 0; mostrarSheet(); });
@@ -2061,7 +2063,6 @@ async function salvarNota(st){
   const rep = jaLancada ? {mercado: jaLancada.lugar, finalizadaEm: tsNota(jaLancada), total: jaLancada.total} : notaRepetida(lugar, st.data, total);
   if (rep && !(await confirmar(`Esta nota parece já ter sido lançada (${rep.mercado}, ${fmtData(rep.finalizadaEm)}, ${fmt(rep.total)}). Lançar de novo?`, 'Lançar mesmo assim'))) return;
   const quando = tsNota({data: st.data});
-  const ab0 = compraAberta(); const naListaAntes = ab0 ? ab0.itens.filter(i => !i.notaId || i.notaId !== notaId).map(i => i.pid) : [];
   const codigoLivre = cod => cod && ![...Dados.produtos.values()].some(x => x.codigo === cod);
   const novos = new Map(), porPid = new Map(), pidDaLinha = new Map();
   for (const l of linhas) {
@@ -2090,33 +2091,33 @@ async function salvarNota(st){
     const g = porPid.get(p.id) || {p, qtd: 0, total: 0, units: new Set()};
     g.p = p; g.qtd += l.qtd; g.total += v; g.units.add(l.unit > 0 && Math.abs(l.unit * l.qtd - v) <= 0.02 ? l.unit : null); porPid.set(p.id, g);
   }
+  // itens da lista aberta que vieram na nota (já comprados): saem da lista se o usuário deixou marcado; voltam se a nota for excluída
+  const ab0 = compraAberta();
+  const tirados = st.tirarDaLista !== false && ab0 ? ab0.itens.filter(i => porPid.has(i.pid)).map(i => clone(i)) : [];
   // guarda a nota: fotos, número, chave, descontos e o lançamento como foi lido (se faltar espaço, guarda sem as fotos)
   const nota = {id: notaId, lugar, cnpj: st.cnpj || '', data: st.data, numero: st.numero || '', serie: st.serie || '', chave: st.chave || '', total, totalNota: st.totalNota || null,
     subtotal: k.bruto, descontoItens: k.descItens, descontoGeral: k.geral, fotos: (st.imagens || []).map(b => 'data:image/jpeg;base64,' + b),
     itens: linhas.map(l => ({numero: l.numero, descricao: l.descricao, pid: pidDaLinha.get(l), qtd: l.qtd, unidade: l.unidade, bruto: r2(l.total + (l.desconto || 0)), desconto: l.desconto || 0, total: pago.get(l)})),
-    criados: [...novos.values()].map(p => p.id), naListaAntes, criadaEm: Date.now()};
+    criados: [...novos.values()].map(p => p.id), naListaAntes: [], tiradosDaLista: tirados, criadaEm: Date.now()};
   let semFotos = false;
   try { await BD.gravar('notas', notaId, nota); }
   catch { try { await BD.gravar('notas', notaId, Object.assign({}, nota, {fotos: []})); semFotos = true; } catch (e) { return falhaGravacao(e); } }
-  // lança no carrinho da lista: item que já estava na lista recebe quantidade e preço da nota; o resto entra já comprado
-  const c = editarCompraAberta();
-  for (const g of porPid.values()) {
+  // a compra vai direto para o histórico, com a data da nota
+  const itens = [...porPid.values()].map(g => {
     const impresso = g.units.size === 1 ? [...g.units][0] : null;
-    const dados = {qtd: r3(g.qtd), preco: impresso || Math.round(g.total / g.qtd * 10000) / 10000, unidade: g.p.unidade || 'un', comprado: true, compradoEm: quando, local: lugar, notaId};
-    const it = c.itens.find(i => i.pid === g.p.id);
-    if (it) Object.assign(it, dados);
-    else c.itens.push(Object.assign({pid: g.p.id, nome: g.p.nome, marca: g.p.marca || '', categoriaId: catDoProduto(g.p), unidade: g.p.unidade || 'un', obs: null, sugestao: null}, dados));
-  }
-  if (!c.mercado) c.mercado = lugar;
-  Dados.salvarCompra(c);
+    return {pid: g.p.id, nome: g.p.nome, marca: g.p.marca || '', categoriaId: catDoProduto(g.p), unidade: g.p.unidade || 'un', qtd: r3(g.qtd), preco: impresso || Math.round(g.total / g.qtd * 10000) / 10000,
+      comprado: true, compradoEm: quando, local: lugar, obs: null, sugestao: null, notaId};
+  });
+  const compraId = novoId();
+  Dados.salvarCompra({id: compraId, status: 'finalizada', mercado: lugar, orcamento: null, criadaEm: quando, finalizadaEm: quando, total, itens, origem: 'nota'});
+  if (tirados.length) { const c = clone(ab0); const fora = new Set(tirados.map(i => i.pid)); c.itens = c.itens.filter(i => !fora.has(i.pid)); Dados.salvarCompra(c); }
   if (!Dados.cfg.mercados.includes(lugar)) Dados.salvarCfg(x => { x.mercados.push(lugar); x.mercados.sort((a, b) => a.localeCompare(b, 'pt-BR')); });
   if (st.cnpj && (Dados.cfg.lojas || {})[st.cnpj] !== lugar) Dados.salvarCfg(x => { x.lojas = Object.assign({}, x.lojas, {[st.cnpj]: lugar}); });
   st.lancada = true; await apagarRascunhoNota();
-  fecharTodasSheets();
-  salvarScroll(); UI.tab = 'lista'; salvarUI(); render(); window.scrollTo(0, 0);
-  toast(`${porPid.size} ${porPid.size === 1 ? 'item lançado' : 'itens lançados'} no carrinho, ${fmt(total)} em ${lugar}` + (novos.size ? `. ${novos.size} ${novos.size === 1 ? 'produto cadastrado' : 'produtos cadastrados'}` : '')
-    + (semFotos ? '. Sem espaço para as fotos: a nota foi guardada sem elas' : '') + '. Finalize a compra para guardar no histórico.',
-    UI.ocultarComprados ? {rotulo: 'Ver itens', fn: () => { UI.ocultarComprados = false; salvarUI(); render(); }} : null, 9000);
+  fecharTodasSheets(); render();
+  toast(`Compra lançada: ${itens.length} ${itens.length === 1 ? 'item' : 'itens'}, ${fmt(total)} em ${lugar}` + (novos.size ? `. ${novos.size} ${novos.size === 1 ? 'produto cadastrado' : 'produtos cadastrados'}` : '')
+    + (tirados.length ? `. ${tirados.length} ${tirados.length === 1 ? 'saiu' : 'saíram'} da lista` : '') + (semFotos ? '. Sem espaço para as fotos: a nota foi guardada sem elas' : ''), null, 7000);
+  abrirCompra(compraId);
 }
 /** Chave de acesso em grupos de 4 dígitos. */
 const fmtChave = s => String(s || '').replace(/(\d{4})(?=\d)/g, '$1 ');
@@ -2210,6 +2211,13 @@ async function excluirNotas(ids, apagarProdutos){
     if (!c.itens.length) Dados.excluirCompra(c.id);
     else { c.total = r2(c.itens.reduce((t, i) => t + i.qtd * i.preco, 0)); Dados.salvarCompra(c); }
   }
+  // itens que a nota tirou da lista voltam pendentes
+  const voltar = notas.flatMap(n => n.tiradosDaLista || []).filter(i => i && Dados.produtos.has(i.pid));
+  if (voltar.length) {
+    const c = editarCompraAberta();
+    for (const i of voltar) if (!c.itens.some(x => x.pid === i.pid)) { const x = Object.assign({}, i, {comprado: false, preco: null}); delete x.compradoEm; delete x.local; delete x.notaId; c.itens.push(x); }
+    Dados.salvarCompra(c);
+  }
   for (const id of ids) await BD.apagar('notas', id).catch(() => {});
   let produtos = 0;
   if (apagarProdutos) {
@@ -2248,7 +2256,7 @@ async function abrirLancamentos(){
       const linhaC = c => { const temNota = c.itens.some(i => i.notaId); return `<div class="nota-linha${selC.has(c.id) ? ' ok' : ''}"><button class="check" data-a="lc-sel-c" data-id="${esc(c.id)}" aria-label="Selecionar compra de ${fmtData(c.finalizadaEm)}">${svgCheck}</button>
         <button class="info" data-a="lc-ver-c" data-id="${esc(c.id)}"><div class="nome-linha"><div class="nome">${esc(c.mercado || 'Sem mercado')}</div>${temNota ? '<span class="badge ok">com nota</span>' : ''}</div><div class="meta"><span>${fmtData(c.finalizadaEm)}</span><span>${c.itens.length} ${c.itens.length === 1 ? 'item' : 'itens'}</span></div></button><div class="valor">${fmt(c.total ?? totais(c).gasto)}</div></div>`; };
       const n = selN.size + selC.size;
-      return `<div class="sub" style="margin:0 0 10px">Excluir uma nota apaga o lançamento inteiro: tira os itens dela do carrinho e do histórico e apaga a nota guardada. Item que já estava na lista antes da nota volta a ficar pendente.</div>
+      return `<div class="sub" style="margin:0 0 10px">Excluir uma nota apaga o lançamento inteiro: tira a compra do histórico (ou os itens do carrinho, em notas antigas) e apaga a nota guardada. Itens que ela tirou da lista voltam para a lista.</div>
         <div class="nome-linha" style="justify-content:space-between;margin-top:6px"><h3 style="margin:0">Notas lançadas (${notas.length})</h3>${notas.length ? `<button class="btn texto" data-a="lc-todas-n">${selN.size === notas.length ? 'Desmarcar todas' : 'Selecionar todas'}</button>` : ''}</div>
         ${notas.length ? notas.map(linhaN).join('') : '<div class="contagem">Nenhuma nota lançada a partir da versão 2.5.</div>'}
         <div class="nome-linha" style="justify-content:space-between;margin-top:18px"><h3 style="margin:0">Compras no histórico (${compras.length})</h3>${compras.length ? `<button class="btn texto" data-a="lc-todas-c">${selC.size === compras.length ? 'Desmarcar todas' : 'Selecionar todas'}</button>` : ''}</div>
@@ -3684,7 +3692,8 @@ async function restaurarBackup(arq){
       await BD.gravar('notas', n.id, {id: n.id, lugar: str(n.lugar, 40), data: /^\d{4}-\d{2}-\d{2}$/.test(n.data) ? n.data : dataNota(''), numero: str(n.numero, 9).replace(/\D/g, ''), serie: str(n.serie, 3).replace(/\D/g, ''),
         chave: /^\d{44}$/.test(n.chave || '') ? n.chave : '', total: Number(n.total) || 0, totalNota: Number(n.totalNota) || null, fotos: (atual && atual.fotos) || [], criadaEm: Number(n.criadaEm) || Date.now(),
         subtotal: Number(n.subtotal) || 0, descontoItens: Number(n.descontoItens) || 0, descontoGeral: Number(n.descontoGeral) || 0,
-        criados: Array.isArray(n.criados) ? n.criados.filter(x => typeof x === 'string').map(x => x.slice(0, 60)) : [], naListaAntes: Array.isArray(n.naListaAntes) ? n.naListaAntes.filter(x => typeof x === 'string').map(x => x.slice(0, 60)) : [],
+        criados: Array.isArray(n.criados) ? n.criados.filter(x => typeof x === 'string').map(x => x.slice(0, 60)) : [],
+        tiradosDaLista: Array.isArray(n.tiradosDaLista) ? n.tiradosDaLista.filter(i => i && typeof i.pid === 'string').slice(0, 300).map(item) : [], naListaAntes: Array.isArray(n.naListaAntes) ? n.naListaAntes.filter(x => typeof x === 'string').map(x => x.slice(0, 60)) : [],
         itens: (Array.isArray(n.itens) ? n.itens : []).slice(0, 300).filter(i => i && typeof i === 'object').map(i => ({numero: Number.isInteger(i.numero) ? i.numero : null, descricao: str(i.descricao, 80), pid: str(i.pid, 60), qtd: Number(i.qtd) || 0, unidade: i.unidade === 'kg' ? 'kg' : 'un', bruto: Number(i.bruto) || 0, desconto: Number(i.desconto) || 0, total: Number(i.total) || 0}))});
     }
     if (o.cfg && Array.isArray(o.cfg.categorias)) Dados.salvarCfg(c => {
