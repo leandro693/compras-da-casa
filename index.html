@@ -55,7 +55,7 @@ img{max-width:100%}
 .versao{font-size:12px;color:var(--muted)}
 .modo-local{font-size:12px;background:var(--warn-bg);color:var(--warn-ink);border-radius:999px;padding:2px 8px}
 main{padding:0 16px calc(110px + env(safe-area-inset-bottom,0px));max-width:680px;margin:0 auto}
-.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(5,1fr);background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
 .tabs button{background:none;border:0;padding:8px 0 10px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;color:var(--muted)}
 .tabs button[aria-current="page"]{color:var(--primary);font-weight:700}
 .tabs svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -305,6 +305,7 @@ body.mercado .fab{padding:18px 24px;font-size:18px}
 </header>
 <main id="view"><div class="carregando"><div class="spin"></div>Carregando suas compras</div></main>
 <nav class="tabs" id="tabs" aria-label="Seções">
+  <button data-a="tab" data-v="inicio"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>Início</button>
   <button data-a="tab" data-v="lista"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>Lista</button>
   <button data-a="tab" data-v="produtos"><svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>Produtos</button>
   <button data-a="tab" data-v="relatorios"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Relatórios</button>
@@ -988,7 +989,7 @@ const SEMENTE = {
 /* =========================================================
    CONSTANTES
    ========================================================= */
-const VERSAO = 'v2.8.1';
+const VERSAO = 'v2.9.0';
 // bibliotecas guardadas no próprio repositório (funcionam sem internet)
 const URL_ZXING = 'lib/zxing.min.js';
 const URL_JSPDF = 'lib/jspdf.umd.min.js';
@@ -1049,7 +1050,7 @@ const svgCheck = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></s
 /* =========================================================
    ESTADO DA TELA (persistido no aparelho, para manter a tela ao recarregar)
    ========================================================= */
-const UI = {tab:'lista', ocultarComprados:true, modoMercado:false, filtroCat:'', catProdutos:'', periodo:'3m', produtoGrafico:null};
+const UI = {tab:'inicio', periodoInicio:'mes', ocultarComprados:true, modoMercado:false, filtroCat:'', catProdutos:'', periodo:'3m', produtoGrafico:null};
 let buscaLista = '', buscaProdutos = '';
 function carregarUI(){ try { Object.assign(UI, JSON.parse(localStorage.getItem('compras.ui') || '{}')); } catch {} }
 function salvarUI(){ try { localStorage.setItem('compras.ui', JSON.stringify(UI)); } catch {} }
@@ -1858,8 +1859,25 @@ function contasNota(st){
   return {inc, liquido, descItens, bruto, geral, lancar: r2(liquido - geral)};
 }
 
-/** FOLHA: fotos da nota e leitura pela IA. */
-function abrirLerNota(){
+/* Rascunho da conferência: guardado no aparelho a cada mudança, até lançar ou descartar */
+let _rascunhoNota = false, _tRascunho = null;
+function guardarRascunhoNota(st){
+  clearTimeout(_tRascunho);
+  _tRascunho = setTimeout(() => { if (st.lancada) return; BD.gravar('cfg', 'rascunhoNota', JSON.parse(JSON.stringify(st))).then(() => { _rascunhoNota = true; }).catch(() => {}); }, 300);
+}
+async function apagarRascunhoNota(){ clearTimeout(_tRascunho); _rascunhoNota = false; try { await BD.apagar('cfg', 'rascunhoNota'); } catch {} }
+async function lerRascunhoNota(){ try { const r = await BD.ler('cfg', 'rascunhoNota'); return r && Array.isArray(r.itens) && r.itens.length ? r : null; } catch { return null; } }
+
+/** FOLHA: fotos da nota e leitura pela IA (oferece continuar uma conferência guardada). */
+async function abrirLerNota(){
+  const r = await lerRascunhoNota();
+  if (r) {
+    const v = await escolha('Nota em conferência', `Você estava conferindo uma nota${r.loja ? ' de ' + r.loja : ''} com ${r.itens.length} ${r.itens.length === 1 ? 'item' : 'itens'}. Continuar de onde parou?`,
+      [{v: 'continuar', rotulo: 'Continuar a conferência', pri: true}, {v: 'descartar', rotulo: 'Descartar e ler outra nota'}]);
+    if (v === 'continuar') return abrirConferirNota(null, r);
+    if (v !== 'descartar') return;
+    await apagarRascunhoNota(); render();
+  }
   const st = {fotos: [], lendo: null, erro: null};
   const s = {
     titulo: 'Ler nota fiscal',
@@ -1906,14 +1924,20 @@ function abrirLerNota(){
 }
 
 /** FOLHA: conferência da nota antes de lançar. */
-function abrirConferirNota(dados){
+function abrirConferirNota(dados, salvo){
+  if (salvo) return abrirConferenciaComEstado(Object.assign(salvo, {lancada: false}));
   const itens = dados.itens.map(l => Object.assign({desconto: 0, bruto: 0}, l, {incluir: true, alvo: casarLinhaNota(l)}));
   const st = {loja: dados.lugarConhecido || casarMercado(dados.loja) || nomeLimpoLoja(dados.loja), lojaAuto: !!dados.lugarConhecido, lojaLida: dados.loja || '', cnpj: dados.cnpj || '', data: dados.data ? dataNota(dados.data) : '', totalNota: dados.total, numero: dados.numero || '', serie: dados.serie || '', chave: dados.chave || '',
     imagens: dados.imagens || [], avisos: dados.avisos || [], subtotal: dados.subtotal || null, descontoTotal: dados.descontoTotal || null, descontoGeral: descontoGeralLido(dados, itens), itens};
+  abrirConferenciaComEstado(st);
+}
+/** Abre a conferência a partir do estado (nota recém-lida ou rascunho guardado). */
+function abrirConferenciaComEstado(st){
   const naLista = () => { const c = compraAberta(); if (!c) return 0; const pids = new Set(st.itens.filter(l => l.incluir && l.alvo).map(l => l.alvo)); return c.itens.filter(i => pids.has(i.pid)).length; };
   const s = {
     titulo: 'Conferir nota',
     html(){
+      guardarRascunhoNota(st);
       const k = contasNota(st);
       const dif = st.totalNota > 0 ? r2(k.lancar - st.totalNota) : 0;
       const rep = st.data ? notaRepetida(corrigirLugar(st.loja), st.data, k.lancar) : null;
@@ -1946,25 +1970,27 @@ function abrirConferirNota(dados){
         <div class="sheet-acoes"><button class="btn pri" data-a="nota-salvar">Lançar no carrinho (${fmt(k.lancar)})</button></div>`;
     },
     montar(el){
-      ligarCampoLugar(el, 'nLoja', v => { st.loja = v; st.lojaAuto = false; }, v => { st.loja = v; st.lojaAuto = false; });
+      ligarCampoLugar(el, 'nLoja', v => { st.loja = v; st.lojaAuto = false; guardarRascunhoNota(st); }, v => { st.loja = v; st.lojaAuto = false; guardarRascunhoNota(st); });
       el.querySelector('#nData').addEventListener('change', e => { st.data = e.target.value ? dataNota(e.target.value) : ''; mostrarSheet(); });
-      el.querySelector('#nNum').addEventListener('input', e => { st.numero = e.target.value.replace(/\D/g, '').slice(0, 9); });
-      el.querySelector('#nSerie').addEventListener('input', e => { st.serie = e.target.value.replace(/\D/g, '').slice(0, 3); });
+      el.querySelector('#nNum').addEventListener('input', e => { st.numero = e.target.value.replace(/\D/g, '').slice(0, 9); guardarRascunhoNota(st); });
+      el.querySelector('#nSerie').addEventListener('input', e => { st.serie = e.target.value.replace(/\D/g, '').slice(0, 3); guardarRascunhoNota(st); });
       el.querySelector('#nDescGeral').addEventListener('change', e => { const n = parseNum(e.target.value); st.descontoGeral = n > 0 ? r2(n) : 0; mostrarSheet(); });
       el.querySelector('#nTotal').addEventListener('change', e => { const n = parseNum(e.target.value); st.totalNota = n > 0 ? r2(n) : null; mostrarSheet(); });
     },
     acoes: {
       'nota-incluir'(b){ const l = st.itens[Number(b.dataset.i)]; if (l) { l.incluir = !l.incluir; mostrarSheet(); } },
-      'nota-item'(b){ abrirItemNota(st.itens[Number(b.dataset.i)]); },
+      'nota-item'(b){ abrirItemNota(st.itens[Number(b.dataset.i)], () => guardarRascunhoNota(st)); },
       'nota-salvar'(){ salvarNota(st); },
     },
+    aoFechar(){ if (!st.lancada) toast('A nota ficou guardada. Para continuar, toque em Ler nota fiscal.', {rotulo: 'Descartar', fn: async () => { await apagarRascunhoNota(); render(); toast('Nota descartada'); }}, 7000); },
   };
   abrirSheet(s);
 }
 
 /** FOLHA: corrigir uma linha da nota (produto, quantidade e total pago). */
-function abrirItemNota(l){
+function abrirItemNota(l, aoMudar){
   if (!l) return;
+  const mudou = () => { if (aoMudar) aoMudar(); };
   let q = '';
   const resHTML = () => (q.trim() ? ordenarProdutos([...Dados.produtos.values()].filter(x => casa(textoBusca(x), q))).slice(0, 6) : [])
     .map(x => `<div class="res-linha">${thumbHTML(x, x.nome)}<div class="info"><div class="nome">${esc(x.nome)}</div><div class="meta"><span>${esc([x.marca, x.tamanho].filter(Boolean).join(' '))}</span></div></div><button class="mini-add" data-a="ni-ligar" data-pid="${esc(x.id)}">Ligar</button></div>`).join('');
@@ -1998,6 +2024,7 @@ function abrirItemNota(l){
           l.unit = preco > 0 ? preco : null; l.bruto = r2(l.qtd * preco);
         }
         else l[k] = i.value;
+        mudou();
       }));
       const b = el.querySelector('#niBusca'); b.addEventListener('input', () => { q = b.value; el.querySelector('#niRes').innerHTML = resHTML(); });
     },
@@ -2084,6 +2111,7 @@ async function salvarNota(st){
   Dados.salvarCompra(c);
   if (!Dados.cfg.mercados.includes(lugar)) Dados.salvarCfg(x => { x.mercados.push(lugar); x.mercados.sort((a, b) => a.localeCompare(b, 'pt-BR')); });
   if (st.cnpj && (Dados.cfg.lojas || {})[st.cnpj] !== lugar) Dados.salvarCfg(x => { x.lojas = Object.assign({}, x.lojas, {[st.cnpj]: lugar}); });
+  st.lancada = true; await apagarRascunhoNota();
   fecharTodasSheets();
   salvarScroll(); UI.tab = 'lista'; salvarUI(); render(); window.scrollTo(0, 0);
   toast(`${porPid.size} ${porPid.size === 1 ? 'item lançado' : 'itens lançados'} no carrinho, ${fmt(total)} em ${lugar}` + (novos.size ? `. ${novos.size} ${novos.size === 1 ? 'produto cadastrado' : 'produtos cadastrados'}` : '')
@@ -2556,18 +2584,111 @@ function mostrarSheet(){
 let _agendado = false;
 /** Agenda novo desenho (agrupa mudanças seguidas). */
 function agendarRender(){ IDX = null; if (_agendado) return; _agendado = true; requestAnimationFrame(() => { _agendado = false; render(); }); }
-const TELAS = {lista: () => telaLista(), produtos: () => telaProdutos(), relatorios: () => telaRelatorios(), ajustes: () => telaAjustes()};
+const TELAS = {inicio: () => telaInicio(), lista: () => telaLista(), produtos: () => telaProdutos(), relatorios: () => telaRelatorios(), ajustes: () => telaAjustes()};
 /** Desenha a aba atual preservando foco e cursor do campo de busca. */
 function render(){
   if (!Dados.cfg) return;
   const view = $('#view');
   const ae = document.activeElement; const fid = ae && ae.id && view.contains(ae) ? ae.id : null;
   const sel = fid && typeof ae.selectionStart === 'number' ? [ae.selectionStart, ae.selectionEnd] : null;
-  if (!TELAS[UI.tab]) UI.tab = 'lista';
+  if (!TELAS[UI.tab]) UI.tab = 'inicio';
   view.innerHTML = TELAS[UI.tab]();
   document.querySelectorAll('#tabs button').forEach(b => { if (b.dataset.v === UI.tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   document.body.classList.toggle('mercado', !!UI.modoMercado);
   if (fid) { const n = document.getElementById(fid); if (n) { n.focus({preventScroll:true}); if (sel) try { n.setSelectionRange(sel[0], sel[1]); } catch {} } }
+}
+
+/* =========================================================
+   TELA: INÍCIO (painel do período, atalhos e o que pode estar acabando)
+   ========================================================= */
+const PERIODOS_INI = [['mes', 'Este mês'], ['3m', '3 meses'], ['12m', '12 meses']];
+/** Começo e fim do período (deslocar = 1 dá o período anterior, do mesmo tamanho). */
+function faixaPeriodo(p, deslocar){
+  const d = new Date(), meses = p === 'mes' ? 1 : p === '3m' ? 3 : 12;
+  const ini = new Date(d.getFullYear(), d.getMonth() - (meses - 1) - deslocar * meses, 1).getTime();
+  const fim = deslocar ? new Date(d.getFullYear(), d.getMonth() - (meses - 1) - (deslocar - 1) * meses, 1).getTime() : Infinity;
+  return [ini, fim];
+}
+function telaInicio(){
+  const p = PERIODOS_INI.some(x => x[0] === UI.periodoInicio) ? UI.periodoInicio : 'mes';
+  const [i0] = faixaPeriodo(p, 0), [i1, f1] = faixaPeriodo(p, 1);
+  const todas = comprasFeitas();
+  // compara com o mesmo trecho do período anterior (ex.: 1º a 6 de setembro contra 1º a 6 de outubro)
+  const fimAnt = Math.min(f1, i1 + (Date.now() - i0));
+  const a = agregados(todas.filter(c => c.finalizadaEm >= i0)), b = agregados(todas.filter(c => c.finalizadaEm >= i1 && c.finalizadaEm < fimAnt));
+  const ab = compraAberta(), t = ab ? totais(ab) : null;
+  let h = `<div class="chips" role="group" aria-label="Período" style="margin-top:6px">${PERIODOS_INI.map(([v, r]) => `<button class="chip" data-a="periodo-ini" data-v="${v}" aria-pressed="${p === v}">${r}</button>`).join('')}</div>`;
+  if (_rascunhoNota) h += `<section class="cartao"><h2>Nota em conferência</h2><div class="sub" style="margin:0 0 10px">Você começou a conferir uma nota e não lançou. Ela ficou guardada.</div><button class="btn pri bloco" data-a="ler-nota">Continuar a conferência</button></section>`;
+  // gasto do período e comparação com o anterior
+  const comp = b.total > 0 ? (() => { const pct = Math.round((a.total - b.total) / b.total * 100); return pct === 0 ? 'Igual ao mesmo trecho do período anterior' : `${Math.abs(pct)}% ${pct < 0 ? 'a menos' : 'a mais'} que no mesmo trecho do período anterior (${fmt(b.total)})`; })() : '';
+  h += `<div class="stats"><div class="stat"><small>Total gasto</small><b>${fmt(a.total)}</b></div><div class="stat"><small>Compras</small><b>${a.n}</b></div><div class="stat"><small>Média por compra</small><b>${fmt(a.n ? a.total / a.n : 0)}</b></div><div class="stat"><small>Itens comprados</small><b>${a.itens}</b></div></div>`;
+  if (comp) h += `<div class="contagem" style="margin:-4px 0 8px">${esc(comp)}.</div>`;
+  if (t && t.comprados) h += `<div class="contagem" style="margin:0 0 8px">No carrinho agora, ainda não finalizado: ${fmt(t.gasto)}.</div>`;
+  // atalhos
+  h += `<div class="grade-btn" style="margin:6px 0 4px"><button class="btn pri" data-a="ler-nota">${ICONES.arquivo}Ler nota fiscal</button><button class="btn pri" data-a="criar-lista">${ICONES.mais}Criar lista de compras</button>${ab && ab.itens.length ? `<button class="btn sec" data-a="tab" data-v="lista">${ICONES.colar}Continuar lista: ${ab.itens.length} ${ab.itens.length === 1 ? 'item' : 'itens'}${t.comprados ? `, ${t.comprados} no carrinho` : ''}</button>` : ''}</div>`;
+  // o que pode estar acabando
+  const sug = sugestoes();
+  if (sug.length) h += `<section class="cartao sug"><h2>Pode estar acabando</h2><div class="sub">Pelo intervalo em que você costuma comprar. Toque para pôr na lista.</div><div class="chips quebra">${sug.map(s => `<button class="chip" data-a="add-sug" data-pid="${esc(s.pid)}">+ ${esc(Dados.produtos.get(s.pid).nome)}</button>`).join('')}</div></section>`;
+  if (!todas.length) return h + `<div class="vazio"><strong>Ainda não há compras finalizadas</strong>Comece lendo uma nota fiscal ou criando uma lista de compras.</div>`;
+  // por categoria
+  const cats = [...a.porCat].sort((x, y) => y[1] - x[1]).slice(0, 6); const maxCat = Math.max(...cats.map(c => c[1]), 1);
+  if (cats.length) h += `<section class="cartao"><h2>Por categoria</h2>${cats.map(([cid, v]) => { const c = cid ? categoria(cid) : SEM_CAT; return `<div class="barra-h"><span class="nm">${esc(c.nome)}</span><span class="trilho"><i style="width:${(v / maxCat * 100).toFixed(1)}%;background:${esc(c.cor)}"></i></span><span class="vl">${fmt(v)}</span></div>`; }).join('')}</section>`;
+  // últimas compras
+  h += `<section class="cartao"><h2>Últimas compras</h2>${todas.slice(0, 5).map(c => `<button class="compra-linha" data-a="ver-compra" data-id="${esc(c.id)}"><span><b>${fmtData(c.finalizadaEm)}</b><small>${esc(c.mercado || 'Sem mercado')}, ${c.itens.length} ${c.itens.length === 1 ? 'item' : 'itens'}</small></span><b>${fmt(c.total ?? totais(c).gasto)}</b></button>`).join('')}<button class="btn texto" data-a="tab" data-v="relatorios">Ver relatórios completos</button></section>`;
+  return h;
+}
+
+/* =========================================================
+   FOLHA: CRIAR LISTA DE COMPRAS (categorias, produtos e quantidades)
+   ========================================================= */
+/** Produto que pode estar acabando pelo ritmo de compra. */
+const acabando = pid => { const r = ritmoProduto(pid); return !!(r && r.media && r.desde / r.media >= 0.9); };
+/** Quantidade da última compra (ou 1). */
+const qtdSugerida = p => { const a = indice().hist.get(p.id) || []; const u = a.length ? a[a.length - 1].qtd : null; return u > 0 ? u : 1; };
+function abrirCriarLista(){
+  const cats = new Set(), marcados = new Map();
+  const naLista = () => { const ab = compraAberta(); return new Set(((ab && ab.itens) || []).map(i => i.pid)); };
+  const catDe = p => catDoProduto(p) || '_sem';
+  const produtos = () => [...Dados.produtos.values()].filter(p => cats.has(catDe(p))).sort((a, b) => categoria(catDoProduto(a)).nome.localeCompare(categoria(catDoProduto(b)).nome, 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR'));
+  const s = {
+    titulo: 'Criar lista de compras',
+    html(){
+      const nl = naLista(), ps = produtos(), livres = ps.filter(p => !nl.has(p.id));
+      const chips = [...Dados.cfg.categorias.map(c => [c.id, c.nome, c.cor]), ['_sem', 'Sem categoria', SEM_CAT.cor]]
+        .map(([id, nome, cor]) => `<button type="button" class="chip" data-a="cl-cat" data-v="${esc(id)}" aria-pressed="${cats.has(id)}"><i class="dot" style="background:${esc(cor)}"></i>${esc(nome)}</button>`).join('');
+      const linha = p => {
+        const ja = nl.has(p.id), q = marcados.get(p.id), r = ritmoProduto(p.id);
+        const meta = [esc(categoria(catDoProduto(p)).nome), r ? 'comprado ' + desdeTxt(r.desde) : 'nunca comprado'].map(x => `<span>${x}</span>`).join('');
+        return `<div class="nota-linha${q !== undefined ? ' ok' : ''}${ja ? ' fora' : ''}"><button class="check" data-a="cl-sel" data-pid="${esc(p.id)}" ${ja ? 'disabled' : ''} aria-label="Marcar ${esc(p.nome)}">${svgCheck}</button>
+          <div class="info"><div class="nome-linha"><div class="nome">${esc(p.nome)}</div>${ja ? '<span class="badge ok">Na lista</span>' : acabando(p.id) ? '<span class="badge alerta">Acabando</span>' : ''}</div><div class="meta">${meta}</div></div>
+          ${q !== undefined ? `<div class="qtd-mini"><button type="button" data-a="cl-menos" data-pid="${esc(p.id)}" aria-label="Diminuir">−</button><span>${esc(fmtQtd(q, p.unidade))}</span><button type="button" data-a="cl-mais" data-pid="${esc(p.id)}" aria-label="Aumentar">+</button></div>` : ''}</div>`;
+      };
+      return `<span class="rot" style="margin-top:0">1. Quais categorias você vai comprar?</span><div class="chips quebra">${chips}</div>
+        ${cats.size ? `<div class="nome-linha" style="justify-content:space-between;margin-top:16px"><span class="rot" style="margin:0">2. Marque os produtos</span>${livres.length ? `<button class="btn texto" data-a="cl-todos">${livres.every(p => marcados.has(p.id)) ? 'Desmarcar todos' : 'Marcar todos'}</button>` : ''}</div>
+          <div class="contagem">Os que podem estar acabando já vêm marcados. A quantidade é a da última compra.</div>
+          ${ps.length ? ps.map(linha).join('') : '<div class="contagem">Nenhum produto cadastrado nessas categorias.</div>'}`
+          : '<div class="contagem" style="margin-top:10px">Escolha uma ou mais categorias para ver os produtos.</div>'}
+        <div class="sheet-acoes"><button class="btn pri" data-a="cl-gerar" ${marcados.size ? '' : 'disabled'}>Gerar lista${marcados.size ? ` (${marcados.size} ${marcados.size === 1 ? 'item' : 'itens'})` : ''}</button></div>`;
+    },
+    acoes: {
+      'cl-cat'(b){
+        const id = b.dataset.v;
+        if (cats.has(id)) { cats.delete(id); for (const pid of [...marcados.keys()]) { const p = Dados.produtos.get(pid); if (p && catDe(p) === id) marcados.delete(pid); } }
+        else { cats.add(id); const nl = naLista(); for (const p of Dados.produtos.values()) if (catDe(p) === id && !nl.has(p.id) && acabando(p.id)) marcados.set(p.id, qtdSugerida(p)); }
+        mostrarSheet();
+      },
+      'cl-sel'(b){ const p = Dados.produtos.get(b.dataset.pid); if (!p) return; marcados.has(p.id) ? marcados.delete(p.id) : marcados.set(p.id, qtdSugerida(p)); mostrarSheet(); },
+      'cl-todos'(){ const nl = naLista(), livres = produtos().filter(p => !nl.has(p.id)); if (livres.every(p => marcados.has(p.id))) livres.forEach(p => marcados.delete(p.id)); else livres.forEach(p => { if (!marcados.has(p.id)) marcados.set(p.id, qtdSugerida(p)); }); mostrarSheet(); },
+      'cl-mais'(b){ const p = Dados.produtos.get(b.dataset.pid); if (p && marcados.has(p.id)) { marcados.set(p.id, r3(marcados.get(p.id) + passoQtd(p.unidade))); mostrarSheet(); } },
+      'cl-menos'(b){ const p = Dados.produtos.get(b.dataset.pid); if (p && marcados.has(p.id)) { const passo = passoQtd(p.unidade); marcados.set(p.id, r3(Math.max(passo, marcados.get(p.id) - passo))); mostrarSheet(); } },
+      'cl-gerar'(){
+        let n = 0; for (const [pid, q] of marcados) if (addNaLista(pid, q)) n++;
+        fecharSheet(); salvarScroll(); UI.tab = 'lista'; buscaLista = ''; UI.filtroCat = ''; salvarUI(); render(); window.scrollTo(0, 0);
+        toast(n ? `Lista gerada: ${n} ${n === 1 ? 'item adicionado' : 'itens adicionados'}` : 'Esses itens já estavam na lista.');
+      },
+    },
+  };
+  abrirSheet(s);
 }
 
 /* =========================================================
@@ -3595,6 +3716,8 @@ const ACOES = {
   colar(){ abrirColar(); },
   item(b){ abrirItem(b.dataset.pid); },
   adicionar(){ abrirAdicionar(); },
+  'periodo-ini'(b){ UI.periodoInicio = b.dataset.v; salvarUI(); render(); },
+  'criar-lista'(){ abrirCriarLista(); },
   'add-sug'(b){ if (addNaLista(b.dataset.pid)) toast(Dados.produtos.get(b.dataset.pid).nome + ' adicionado'); },
   'add-lista'(b){ if (addNaLista(b.dataset.pid)) toast(Dados.produtos.get(b.dataset.pid).nome + ' adicionado à lista'); },
   'novo-produto-busca'(){ abrirProduto(null, {nome: buscaLista.trim(), adicionarNaLista: true}); },
@@ -3699,6 +3822,22 @@ document.addEventListener('change', e => {
   const el = e.target.closest('[data-ch]'); if (el && ALTERACOES[el.dataset.ch]) ALTERACOES[el.dataset.ch](el);
 });
 document.addEventListener('click', e => { if (e.target.closest('[data-arq-label]')) vigiarSeletor(); }, true);
+
+/* =========================================================
+   BOTÃO VOLTAR DO CELULAR (fecha a janela aberta, volta ao Início, só sai com dois toques)
+   ========================================================= */
+let _voltarArmado = false;
+/** Deixa uma entrada no histórico para o voltar ser tratado pelo app. Feita num toque do usuário, para o Chrome não pular a entrada. */
+function armarVoltar(){ if (_voltarArmado) return; try { history.pushState({compras: 'voltar'}, ''); _voltarArmado = true; } catch {} }
+document.addEventListener('click', armarVoltar, true);
+window.addEventListener('popstate', () => {
+  _voltarArmado = false;
+  const modal = $('#modal-root');
+  if (modal.classList.contains('on')) { modal.dispatchEvent(new MouseEvent('click')); return; } // como tocar fora do diálogo
+  if (topoSheet()) { fecharSheet(); return; }
+  if (UI.tab !== 'inicio') { salvarScroll(); UI.tab = 'inicio'; salvarUI(); render(); window.scrollTo(0, 0); return; }
+  toast('Toque voltar de novo para sair.', null, 2500);
+});
 document.addEventListener('input', e => {
   if (e.target.id === 'buscaLista') { buscaLista = e.target.value; render(); }
   else if (e.target.id === 'buscaProdutos') { buscaProdutos = e.target.value; render(); }
@@ -3747,11 +3886,13 @@ function registrarSW(){
 }
 async function iniciar(){
   carregarUI();
+  UI.tab = 'inicio';
   $('#versao').textContent = VERSAO;
   try {
     const r = await Dados.iniciar();
     if (r.vazio) await aplicarSemente();
     await IA.carregar();
+    _rascunhoNota = !!(await lerRascunhoNota());
   } catch {
     $('#view').innerHTML = '<div class="vazio"><strong>Não foi possível abrir o banco do aparelho</strong>Feche e abra o app de novo. Se continuar, verifique se o Chrome não está em modo anônimo.</div>';
     return;
