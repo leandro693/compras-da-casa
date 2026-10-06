@@ -977,7 +977,7 @@ const SEMENTE = {
 /* =========================================================
    CONSTANTES
    ========================================================= */
-const VERSAO = 'v2.4.0';
+const VERSAO = 'v2.4.1';
 // bibliotecas guardadas no próprio repositório (funcionam sem internet)
 const URL_ZXING = 'lib/zxing.min.js';
 const URL_JSPDF = 'lib/jspdf.umd.min.js';
@@ -1613,9 +1613,15 @@ function casarLinhaNota(l){
   const p = n && ps.find(x => norm(x.nome) === n && (!l.marca || !x.marca || norm(x.marca) === norm(l.marca)));
   return p ? p.id : null;
 }
-/** Compra já guardada com o mesmo lugar, dia e total (nota lida duas vezes). */
+/** Nota lida duas vezes: mesmo lugar, dia e total no carrinho atual ou no histórico. */
 function notaRepetida(lugar, data, total){
   if (!(total > 0) || !lugar) return null;
+  const ab = compraAberta();
+  if (ab) {
+    const its = ab.itens.filter(i => i.comprado && i.compradoEm && norm(i.local || ab.mercado) === norm(lugar) && isoData(new Date(i.compradoEm)) === data);
+    const soma = r2(its.reduce((t, i) => t + i.qtd * i.preco, 0));
+    if (its.length && Math.abs(soma - total) < 0.05) return {mercado: lugar, finalizadaEm: its[0].compradoEm, total: soma};
+  }
   return comprasFeitas().find(c => norm(c.mercado) === norm(lugar) && isoData(new Date(c.finalizadaEm)) === data && Math.abs((c.total || 0) - total) < 0.05) || null;
 }
 
@@ -1669,7 +1675,7 @@ function abrirLerNota(){
 /** FOLHA: conferência da nota antes de salvar. */
 function abrirConferirNota(dados){
   const loja = dados.loja && dados.loja === dados.loja.toUpperCase() ? dados.loja.toLowerCase() : dados.loja;
-  const st = {loja: corrigirLugar(loja) || '', data: dataNota(dados.data), totalNota: dados.total, tirarDaLista: true,
+  const st = {loja: corrigirLugar(loja) || '', data: dataNota(dados.data), totalNota: dados.total,
     itens: dados.itens.map(l => Object.assign({}, l, {incluir: true, alvo: casarLinhaNota(l)}))};
   const soma = () => r2(st.itens.filter(l => l.incluir).reduce((t, l) => t + (l.total || 0), 0));
   const naLista = () => { const c = compraAberta(); if (!c) return 0; const pids = new Set(st.itens.filter(l => l.incluir && l.alvo).map(l => l.alvo)); return c.itens.filter(i => pids.has(i.pid)).length; };
@@ -1695,13 +1701,12 @@ function abrirConferirNota(dados){
         ${rep ? `<div class="aviso perigo">Parece que esta nota já foi salva (${esc(rep.mercado)}, ${fmtData(rep.finalizadaEm)}, ${fmt(rep.total)}).</div>` : ''}
         <div class="contagem" style="margin-top:12px">Toque num item para corrigir ou ligar a um produto cadastrado.</div>
         <div>${linhas}</div>
-        ${nl ? `<div class="cfg-linha" style="margin-top:12px"><label class="sw" style="flex:1;justify-content:space-between">Tirar da lista ${nl === 1 ? 'o item que veio' : `os ${nl} itens que vieram`} na nota<input type="checkbox" id="nTirar" ${st.tirarDaLista ? 'checked' : ''}><span></span></label></div>` : ''}
-        <div class="sheet-acoes"><button class="btn pri" data-a="nota-salvar">Salvar compra (${fmt(total)})</button></div>`;
+        <div class="contagem" style="margin-top:12px">Os itens vão para o carrinho da lista, já comprados, com quantidade e preço${nl ? `. ${nl === 1 ? 'O item que já estava na lista é atualizado' : `Os ${nl} itens que já estavam na lista são atualizados`}` : ''}.</div>
+        <div class="sheet-acoes"><button class="btn pri" data-a="nota-salvar">Lançar no carrinho (${fmt(total)})</button></div>`;
     },
     montar(el){
       el.querySelector('#nLoja').addEventListener('input', e => { st.loja = e.target.value; });
       el.querySelector('#nData').addEventListener('change', e => { st.data = dataNota(e.target.value); mostrarSheet(); });
-      const t = el.querySelector('#nTirar'); if (t) t.addEventListener('change', () => { st.tirarDaLista = t.checked; });
     },
     acoes: {
       'nota-lugar'(b){ st.loja = b.dataset.v; mostrarSheet(); },
@@ -1777,7 +1782,11 @@ async function salvarNota(st){
   for (const l of linhas) {
     let p = l.alvo ? Dados.produtos.get(l.alvo) : null;
     if (p) {
-      if (l.ean && !p.codigo && codigoLivre(l.ean)) { p = Object.assign(clone(p), {codigo: l.ean}); Dados.salvarProduto(p); }
+      // a nota completa o código de barras e corrige a forma de venda (unidade ou kg)
+      const mud = {};
+      if (l.ean && !p.codigo && codigoLivre(l.ean)) mud.codigo = l.ean;
+      if ((p.unidade || 'un') !== l.unidade) { mud.unidade = l.unidade; if (l.unidade === 'kg') mud.medida = 'kg'; }
+      if (Object.keys(mud).length) { p = Object.assign(clone(p), mud); Dados.salvarProduto(p); }
     } else {
       const chave = l.ean || norm(l.nome) + '|' + norm(l.marca);
       p = novos.get(chave);
@@ -1792,14 +1801,21 @@ async function salvarNota(st){
     const g = porPid.get(p.id) || {p, qtd: 0, total: 0};
     g.p = p; g.qtd += l.qtd; g.total += l.total || 0; porPid.set(p.id, g);
   }
-  const itens = [...porPid.values()].map(g => ({pid: g.p.id, nome: g.p.nome, marca: g.p.marca || '', categoriaId: catDoProduto(g.p), unidade: g.p.unidade || 'un', qtd: r3(g.qtd), preco: r2(g.total / g.qtd),
-    comprado: true, compradoEm: quando, local: lugar, obs: null, sugestao: null}));
-  Dados.salvarCompra({id: novoId(), status: 'finalizada', mercado: lugar, orcamento: null, criadaEm: quando, finalizadaEm: quando, total, itens, origem: 'nota'});
+  // lança no carrinho da lista: item que já estava na lista recebe quantidade e preço da nota; o resto entra já comprado
+  const c = editarCompraAberta();
+  for (const g of porPid.values()) {
+    const dados = {qtd: r3(g.qtd), preco: r2(g.total / g.qtd), unidade: g.p.unidade || 'un', comprado: true, compradoEm: quando, local: lugar};
+    const it = c.itens.find(i => i.pid === g.p.id);
+    if (it) Object.assign(it, dados);
+    else c.itens.push(Object.assign({pid: g.p.id, nome: g.p.nome, marca: g.p.marca || '', categoriaId: catDoProduto(g.p), unidade: g.p.unidade || 'un', obs: null, sugestao: null}, dados));
+  }
+  if (!c.mercado) c.mercado = lugar;
+  Dados.salvarCompra(c);
   if (!Dados.cfg.mercados.includes(lugar)) Dados.salvarCfg(x => { x.mercados.push(lugar); x.mercados.sort((a, b) => a.localeCompare(b, 'pt-BR')); });
-  let tirados = 0; const ab = compraAberta();
-  if (st.tirarDaLista && ab) { const c = clone(ab); const antes = c.itens.length; c.itens = c.itens.filter(i => !porPid.has(i.pid)); tirados = antes - c.itens.length; if (tirados) Dados.salvarCompra(c); }
   fecharTodasSheets();
-  toast(`Nota salva: ${itens.length} ${itens.length === 1 ? 'produto' : 'produtos'}, ${fmt(total)} em ${lugar}` + (novos.size ? `. ${novos.size} ${novos.size === 1 ? 'cadastrado' : 'cadastrados'}` : '') + (tirados ? `. ${tirados} ${tirados === 1 ? 'saiu' : 'saíram'} da lista` : ''), null, 6000);
+  salvarScroll(); UI.tab = 'lista'; salvarUI(); render(); window.scrollTo(0, 0);
+  toast(`${porPid.size} ${porPid.size === 1 ? 'item lançado' : 'itens lançados'} no carrinho, ${fmt(total)} em ${lugar}` + (novos.size ? `. ${novos.size} ${novos.size === 1 ? 'produto cadastrado' : 'produtos cadastrados'}` : '') + '. Finalize a compra para guardar no histórico.',
+    UI.ocultarComprados ? {rotulo: 'Ver itens', fn: () => { UI.ocultarComprados = false; salvarUI(); render(); }} : null, 9000);
 }
 
 /* =========================================================
