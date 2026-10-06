@@ -130,6 +130,10 @@ main{padding:0 16px calc(110px + env(safe-area-inset-bottom,0px));max-width:680p
 .fotos-ver{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
 .fotos-ver button{border:0;padding:0;background:none;cursor:pointer}
 .fotos-ver img{width:72px;height:96px;object-fit:cover;border-radius:10px;border:1px solid var(--line);display:block}
+.lugar-campo{position:relative}
+.lugar-opcoes{position:absolute;left:0;right:0;top:100%;z-index:5;margin-top:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.25);max-height:264px;overflow:auto}
+.lugar-opcoes button{display:block;width:100%;text-align:left;padding:12px 14px;border:0;border-top:1px solid var(--line);background:none;font-size:16px}
+.lugar-opcoes button:first-child{border-top:0}
 .campo.falta{border-color:var(--danger)}
 .qtd-mini span{min-width:50px;text-align:center;font-weight:700;font-size:14px;white-space:nowrap}
 .valor.est{color:var(--muted);font-weight:500}
@@ -981,7 +985,7 @@ const SEMENTE = {
 /* =========================================================
    CONSTANTES
    ========================================================= */
-const VERSAO = 'v2.6.1';
+const VERSAO = 'v2.7.0';
 // bibliotecas guardadas no próprio repositório (funcionam sem internet)
 const URL_ZXING = 'lib/zxing.min.js';
 const URL_JSPDF = 'lib/jspdf.umd.min.js';
@@ -1550,6 +1554,48 @@ async function lerFotoComIA(arquivo, provedor = IA.atual()){
 }
 
 /* =========================================================
+   LUGAR COM BUSCA (lista suspensa que filtra enquanto digita)
+   ========================================================= */
+/** Campo de lugar: digitar parte do nome mostra só os lugares que batem. */
+function campoLugarHTML(id, valor, placeholder){
+  return `<div class="lugar-campo"><input id="${id}" class="campo" value="${esc(valor || '')}" maxlength="40" placeholder="${esc(placeholder || 'Digite parte do nome')}" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="${id}Op"><div class="lugar-opcoes" id="${id}Op" role="listbox" hidden></div></div>`;
+}
+/** Liga o campo: mostra as opções ao tocar ou digitar; escolher uma chama aoEscolher(nome). */
+function ligarCampoLugar(el, id, aoEscolher, aoDigitar){
+  const i = el.querySelector('#' + id), op = el.querySelector('#' + id + 'Op'); if (!i || !op) return;
+  const mostrar = () => {
+    const q = i.value.trim();
+    const lst = Dados.cfg.mercados.filter(m => !q || casa(norm(m), q)).slice(0, 8);
+    op.innerHTML = lst.map(m => `<button type="button" role="option" data-lugar="${esc(m)}">${esc(m)}</button>`).join('');
+    op.hidden = !lst.length; i.setAttribute('aria-expanded', String(!op.hidden));
+  };
+  i.addEventListener('focus', mostrar);
+  i.addEventListener('input', () => { mostrar(); if (aoDigitar) aoDigitar(i.value); });
+  i.addEventListener('blur', () => setTimeout(() => { op.hidden = true; i.setAttribute('aria-expanded', 'false'); }, 150));
+  // pointerdown chega antes do blur do campo: a escolha não se perde
+  op.addEventListener('pointerdown', e => { const b = e.target.closest('[data-lugar]'); if (!b) return; e.preventDefault(); i.value = b.dataset.lugar; op.hidden = true; aoEscolher(b.dataset.lugar); });
+}
+/** Lugar cadastrado cujo nome aparece no nome impresso da loja ("ATACADAO S.A. LOJA 12" → "Atacadao"), ignorando S.A., LTDA e afins. */
+function casarMercado(nome){
+  const limpar = t => ' ' + norm(t).replace(/[^a-z0-9]+/g, ' ').replace(/(s ?a|ltda|me|epp|eireli|cia|loja|filial|com|comercio|de|do|da|e)/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+  const alvo = limpar(nome); if (alvo.trim().length < 3) return '';
+  const achados = Dados.cfg.mercados.filter(m => { const k = limpar(m); return k.trim().length >= 3 && alvo.includes(k); });
+  return achados.sort((a, b) => limpar(b).length - limpar(a).length)[0] || '';
+}
+/** Confere os dois dígitos verificadores do CNPJ. */
+function cnpjValido(c){
+  if (!/^\d{14}$/.test(c) || /^(\d)\1{13}$/.test(c)) return false;
+  const dv = n => { let t = 0, p = n - 7; for (let k = 0; k < n; k++) { t += Number(c[k]) * p--; if (p < 2) p = 9; } const r = t % 11; return r < 2 ? 0 : 11 - r; };
+  return dv(12) === Number(c[12]) && dv(13) === Number(c[13]);
+}
+/** Lugar já ligado ao CNPJ: primeiro nos ajustes, depois nas notas guardadas com o mesmo CNPJ na chave. */
+async function lugarDoCnpj(cnpj){
+  if (!cnpj) return '';
+  const salvo = (Dados.cfg.lojas || {})[cnpj]; if (salvo) return salvo;
+  try { const n = (await BD.todos('notas')).filter(x => x.chave && x.chave.slice(6, 20) === cnpj && x.lugar).sort((a, b) => (b.criadaEm || 0) - (a.criadaEm || 0))[0]; return n ? n.lugar : ''; } catch { return ''; }
+}
+
+/* =========================================================
    NOTA FISCAL (foto do cupom vira produtos, lugar, preços e carrinho)
    ========================================================= */
 const MAX_FOTOS_NOTA = 4;
@@ -1587,7 +1633,7 @@ function pedidoNota(cats){
     + 'Regra principal: transcreva só o que estiver legível. Se não tiver certeza de um campo, deixe-o vazio: "" para texto e 0 para número. Nunca deduza, complete ou invente valores. '
     + 'Ignore CPF, nome e qualquer dado do consumidor, forma de pagamento, troco, tributos e mensagens. '
     + 'Responda somente com um objeto JSON com estas chaves: '
-    + '"loja" (nome fantasia da loja, sem CNPJ, ou vazio), '
+    + '"loja" (nome fantasia da loja, sem CNPJ, ou vazio), "cnpj" (CNPJ da loja emitente, só dígitos, ou vazio), '
     + '"data_texto" (a data e a hora de EMISSÃO copiadas exatamente como impressas, ex.: "05/10/2026 18:05:32"; a nota pode mostrar várias datas, como emissão e autorização: use a de emissão; não converta; ou vazio), '
     + '"numero_nota" (número da NFC-e ou do cupom, só dígitos como impressos, ou vazio), "serie" (série da nota, só dígitos, ou vazio), "chave_acesso" (chave de acesso de 44 dígitos impressa perto do QR Code, só dígitos, ou vazio), '
     + '"subtotal" (soma dos produtos antes dos descontos, número, ou vazio), "desconto_total" (valor total de descontos da nota, número positivo, ou vazio), "total" (valor total pago da nota, número, ou vazio), '
@@ -1608,8 +1654,8 @@ function esquemaNota(cats){
     required: ['numero', 'codigo', 'descricao', 'quantidade', 'unidade', 'preco_unitario', 'total_bruto', 'desconto', 'total', 'nome', 'marca', 'tamanho', 'categoria'],
     properties: {numero: N, codigo: T, descricao: T, quantidade: N, unidade: {type: 'string', enum: ['un', 'kg']},
       preco_unitario: N, total_bruto: N, desconto: N, total: N, nome: T, marca: T, tamanho: T, categoria: cats.length ? {type: 'string', enum: [...cats, '']} : T}};
-  return {type: 'object', additionalProperties: false, required: ['loja', 'data_texto', 'numero_nota', 'serie', 'chave_acesso', 'subtotal', 'desconto_total', 'total', 'itens'],
-    properties: {loja: T, data_texto: T, numero_nota: T, serie: T, chave_acesso: T, subtotal: N, desconto_total: N, total: N, itens: {type: 'array', items: item}}};
+  return {type: 'object', additionalProperties: false, required: ['loja', 'cnpj', 'data_texto', 'numero_nota', 'serie', 'chave_acesso', 'subtotal', 'desconto_total', 'total', 'itens'],
+    properties: {loja: T, cnpj: T, data_texto: T, numero_nota: T, serie: T, chave_acesso: T, subtotal: N, desconto_total: N, total: N, itens: {type: 'array', items: item}}};
 }
 /** Lê a nota com a IA escolhida e devolve os dados limpos e conferidos (data pela chave de acesso). */
 async function lerNotaComIA(arquivos, provedor = IA.atual()){
@@ -1652,7 +1698,11 @@ async function lerNotaComIA(arquivos, provedor = IA.atual()){
   if (!dataEsc) avisos.push('A data da nota não foi lida. Preencha a data antes de lançar.');
   else if (chave && !doMesDaChave) avisos.push(`Confira a data: a chave de acesso indica ${chave.slice(4, 6)}/20${chave.slice(2, 4)}.`);
   const num = v => { const n = parseNum(v); return n > 0 ? r2(n) : null; };
-  return {loja: textoExterno(o.loja, 40, 'nota'), data: dataEsc ? isoData(dataEsc) : '', numero, serie, chave, subtotal: num(o.subtotal), descontoTotal: num(o.desconto_total), total: num(o.total), avisos, imagens, itens};
+  // CNPJ da loja: o da chave conferida vale mais que o lido no papel; só entra se os dígitos verificadores baterem
+  const cnpjLido = String(o.cnpj ?? '').replace(/\D/g, '');
+  const cnpj = chave ? chave.slice(6, 20) : (cnpjValido(cnpjLido) ? cnpjLido : '');
+  const lugarConhecido = await lugarDoCnpj(cnpj);
+  return {loja: textoExterno(o.loja, 40, 'nota'), cnpj, lugarConhecido, data: dataEsc ? isoData(dataEsc) : '', numero, serie, chave, subtotal: num(o.subtotal), descontoTotal: num(o.desconto_total), total: num(o.total), avisos, imagens, itens};
 }
 /** Produto já cadastrado que corresponde à linha da nota (pelo código de barras ou pelo nome). */
 function casarLinhaNota(l){
@@ -1736,7 +1786,7 @@ function abrirLerNota(){
 function abrirConferirNota(dados){
   const loja = dados.loja && dados.loja === dados.loja.toUpperCase() ? dados.loja.toLowerCase() : dados.loja;
   const itens = dados.itens.map(l => Object.assign({desconto: 0, bruto: 0}, l, {incluir: true, alvo: casarLinhaNota(l)}));
-  const st = {loja: corrigirLugar(loja) || '', data: dados.data ? dataNota(dados.data) : '', totalNota: dados.total, numero: dados.numero || '', serie: dados.serie || '', chave: dados.chave || '',
+  const st = {loja: dados.lugarConhecido || casarMercado(loja) || corrigirLugar(loja) || '', lojaAuto: !!dados.lugarConhecido, cnpj: dados.cnpj || '', data: dados.data ? dataNota(dados.data) : '', totalNota: dados.total, numero: dados.numero || '', serie: dados.serie || '', chave: dados.chave || '',
     imagens: dados.imagens || [], avisos: dados.avisos || [], subtotal: dados.subtotal || null, descontoTotal: dados.descontoTotal || null, descontoGeral: descontoGeralLido(dados, itens), itens};
   const naLista = () => { const c = compraAberta(); if (!c) return 0; const pids = new Set(st.itens.filter(l => l.incluir && l.alvo).map(l => l.alvo)); return c.itens.filter(i => pids.has(i.pid)).length; };
   const s = {
@@ -1754,8 +1804,8 @@ function abrirConferirNota(dados){
           <div class="valor">${fmt(l.total)}</div></div>`;
       }).join('');
       return `${st.avisos.map(a => `<div class="aviso" style="margin-top:0;margin-bottom:10px">${esc(a)}</div>`).join('')}
-        <label class="rot" for="nLoja" style="margin-top:0">Lugar</label><input id="nLoja" class="campo" value="${esc(st.loja)}" maxlength="40" placeholder="Não lido: informe o mercado" autocomplete="off">
-        ${Dados.cfg.mercados.length ? `<div class="chips quebra" style="margin-top:6px">${Dados.cfg.mercados.map(m => `<button type="button" class="chip" data-a="nota-lugar" data-v="${esc(m)}" aria-pressed="${st.loja === m}">${esc(m)}</button>`).join('')}</div>` : ''}
+        <label class="rot" for="nLoja" style="margin-top:0">Lugar</label>${campoLugarHTML('nLoja', st.loja, 'Não lido: digite parte do nome')}
+        ${st.lojaAuto ? `<div class="contagem" style="margin-top:4px">Identificado pelo CNPJ da nota.</div>` : st.cnpj ? `<div class="contagem" style="margin-top:4px">Loja nova: nas próximas notas dela o lugar vem sozinho pelo CNPJ.</div>` : ''}
         <label class="rot" for="nData">Data da nota</label><input id="nData" class="campo${st.data ? '' : ' falta'}" type="date" value="${esc(st.data)}">
         <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px"><div><label class="rot" for="nNum">Número da nota</label><input id="nNum" class="campo" inputmode="numeric" maxlength="9" value="${esc(st.numero)}" placeholder="Não lido" autocomplete="off"></div><div><label class="rot" for="nSerie">Série</label><input id="nSerie" class="campo" inputmode="numeric" maxlength="3" value="${esc(st.serie)}" placeholder="—" autocomplete="off"></div></div>
         ${st.chave ? `<div class="contagem" style="margin-top:6px;word-break:break-all">Chave de acesso (conferida): ${esc(fmtChave(st.chave))}</div>` : ''}
@@ -1774,7 +1824,7 @@ function abrirConferirNota(dados){
         <div class="sheet-acoes"><button class="btn pri" data-a="nota-salvar">Lançar no carrinho (${fmt(k.lancar)})</button></div>`;
     },
     montar(el){
-      el.querySelector('#nLoja').addEventListener('input', e => { st.loja = e.target.value; });
+      ligarCampoLugar(el, 'nLoja', v => { st.loja = v; st.lojaAuto = false; }, v => { st.loja = v; st.lojaAuto = false; });
       el.querySelector('#nData').addEventListener('change', e => { st.data = e.target.value ? dataNota(e.target.value) : ''; mostrarSheet(); });
       el.querySelector('#nNum').addEventListener('input', e => { st.numero = e.target.value.replace(/\D/g, '').slice(0, 9); });
       el.querySelector('#nSerie').addEventListener('input', e => { st.serie = e.target.value.replace(/\D/g, '').slice(0, 3); });
@@ -1782,7 +1832,6 @@ function abrirConferirNota(dados){
       el.querySelector('#nTotal').addEventListener('change', e => { const n = parseNum(e.target.value); st.totalNota = n > 0 ? r2(n) : null; mostrarSheet(); });
     },
     acoes: {
-      'nota-lugar'(b){ st.loja = b.dataset.v; mostrarSheet(); },
       'nota-incluir'(b){ const l = st.itens[Number(b.dataset.i)]; if (l) { l.incluir = !l.incluir; mostrarSheet(); } },
       'nota-item'(b){ abrirItemNota(st.itens[Number(b.dataset.i)]); },
       'nota-salvar'(){ salvarNota(st); },
@@ -1886,7 +1935,7 @@ async function salvarNota(st){
     g.p = p; g.qtd += l.qtd; g.total += v; g.units.add(l.unit > 0 && Math.abs(l.unit * l.qtd - v) <= 0.02 ? l.unit : null); porPid.set(p.id, g);
   }
   // guarda a nota: fotos, número, chave, descontos e o lançamento como foi lido (se faltar espaço, guarda sem as fotos)
-  const nota = {id: notaId, lugar, data: st.data, numero: st.numero || '', serie: st.serie || '', chave: st.chave || '', total, totalNota: st.totalNota || null,
+  const nota = {id: notaId, lugar, cnpj: st.cnpj || '', data: st.data, numero: st.numero || '', serie: st.serie || '', chave: st.chave || '', total, totalNota: st.totalNota || null,
     subtotal: k.bruto, descontoItens: k.descItens, descontoGeral: k.geral, fotos: (st.imagens || []).map(b => 'data:image/jpeg;base64,' + b),
     itens: linhas.map(l => ({numero: l.numero, descricao: l.descricao, pid: pidDaLinha.get(l), qtd: l.qtd, unidade: l.unidade, bruto: r2(l.total + (l.desconto || 0)), desconto: l.desconto || 0, total: pago.get(l)})),
     criados: [...novos.values()].map(p => p.id), naListaAntes, criadaEm: Date.now()};
@@ -1905,6 +1954,7 @@ async function salvarNota(st){
   if (!c.mercado) c.mercado = lugar;
   Dados.salvarCompra(c);
   if (!Dados.cfg.mercados.includes(lugar)) Dados.salvarCfg(x => { x.mercados.push(lugar); x.mercados.sort((a, b) => a.localeCompare(b, 'pt-BR')); });
+  if (st.cnpj && (Dados.cfg.lojas || {})[st.cnpj] !== lugar) Dados.salvarCfg(x => { x.lojas = Object.assign({}, x.lojas, {[st.cnpj]: lugar}); });
   fecharTodasSheets();
   salvarScroll(); UI.tab = 'lista'; salvarUI(); render(); window.scrollTo(0, 0);
   toast(`${porPid.size} ${porPid.size === 1 ? 'item lançado' : 'itens lançados'} no carrinho, ${fmt(total)} em ${lugar}` + (novos.size ? `. ${novos.size} ${novos.size === 1 ? 'produto cadastrado' : 'produtos cadastrados'}` : '')
@@ -2798,11 +2848,11 @@ function abrirMercado(depois){
   const ab = compraAberta();
   abrirSheet({
     titulo: 'Onde você está comprando?',
-    html: () => `${Dados.cfg.mercados.length ? `<span class="rot">Seus lugares de compra</span><div class="chips quebra">${Dados.cfg.mercados.map(m => `<button class="chip" data-a="mer" data-v="${esc(m)}" aria-pressed="${ab && ab.mercado === m}">${esc(m)}</button>`).join('')}</div>` : ''}
-      <label class="rot" for="novoMer">Outro lugar</label><div class="campo-linha"><input id="novoMer" class="campo" maxlength="40" placeholder="Nome do mercado ou quitanda" autocomplete="off"><button class="btn pri" data-a="usar">Usar</button></div>
+    html: () => `<label class="rot" for="novoMer" style="margin-top:0">Lugar</label><div class="campo-linha"><div style="flex:1;min-width:0">${campoLugarHTML('novoMer', ab && ab.mercado, Dados.cfg.mercados.length ? 'Digite parte do nome' : 'Nome do mercado ou quitanda')}</div><button class="btn pri" data-a="usar">Usar</button></div>
+      ${Dados.cfg.mercados.length ? '<div class="contagem" style="margin-top:6px">Toque no campo para ver seus lugares, ou digite um nome novo e toque em Usar.</div>' : ''}
       <div class="contagem" style="margin-top:12px">Os itens colocados no carrinho ficam registrados no lugar em que você está.</div>`,
+    montar(el){ ligarCampoLugar(el, 'novoMer', aplicar); },
     acoes: {
-      mer(b){ aplicar(b.dataset.v); },
       usar(b){ aplicar(b.closest('.sheet').querySelector('#novoMer').value); },
     },
   });
@@ -3389,6 +3439,7 @@ async function restaurarBackup(arq){
     if (o.cfg && Array.isArray(o.cfg.categorias)) Dados.salvarCfg(c => {
       for (const k of o.cfg.categorias) if (k && typeof k.id === 'string' && typeof k.nome === 'string' && !c.categorias.some(x => x.id === k.id)) c.categorias.push({id: k.id.slice(0, 60), nome: k.nome.slice(0, 30), cor: /^#[0-9a-fA-F]{6}$/.test(k.cor) ? k.cor : CORES[0]});
       if (Array.isArray(o.cfg.mercados)) for (const m of o.cfg.mercados) if (typeof m === 'string' && !c.mercados.includes(m.slice(0, 40))) c.mercados.push(m.slice(0, 40));
+      if (o.cfg.lojas && typeof o.cfg.lojas === 'object') for (const [k, v] of Object.entries(o.cfg.lojas)) if (/^\d{14}$/.test(k) && typeof v === 'string' && !(c.lojas || {})[k]) c.lojas = Object.assign({}, c.lojas, {[k]: v.slice(0, 40)});
     });
     esconderToast(); toast('Backup importado');
   } catch (e) { esconderToast(); falhaGravacao(e); }
