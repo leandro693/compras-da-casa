@@ -1,0 +1,2647 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Compras da casa</title>
+<meta name="theme-color" content="#1E6B52">
+<meta name="description" content="Lista de compras da casa com comparador de preços e histórico.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===== Tokens de cor (claro / escuro) ===== */
+:root{
+  --bg:#EDF1EE;--surface:#FFFFFF;--surface-2:#F4F7F5;--ink:#1B2523;--muted:#5C6A66;--line:#D5DED9;
+  --primary:#1E6B52;--primary-ink:#FFFFFF;--primary-soft:#D8EBE2;--primary-line:#8FC2AC;--mark:#F7CB52;
+  --danger:#B23E28;--danger-soft:#FBE4DE;--warn-bg:#FFF2CC;--warn-ink:#684B00;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1412;--surface:#17201C;--surface-2:#1E2924;--ink:#E3ECE8;--muted:#93A39E;--line:#2A3732;
+    --primary:#4DB38A;--primary-ink:#0B1A13;--primary-soft:#1C3A2E;--primary-line:#357A60;--mark:#7A5E10;
+    --danger:#E8765E;--danger-soft:#3A1F19;--warn-bg:#352B10;--warn-ink:#F2D27A;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1412;--surface:#17201C;--surface-2:#1E2924;--ink:#E3ECE8;--muted:#93A39E;--line:#2A3732;
+  --primary:#4DB38A;--primary-ink:#0B1A13;--primary-soft:#1C3A2E;--primary-line:#357A60;--mark:#7A5E10;
+  --danger:#E8765E;--danger-soft:#3A1F19;--warn-bg:#352B10;--warn-ink:#F2D27A;
+  color-scheme:dark;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);-webkit-text-size-adjust:100%}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Figtree',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-size:16px;line-height:1.45;
+  font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1,"tnum" 1;-webkit-tap-highlight-color:transparent}
+body.travado{overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--primary);outline-offset:2px}
+img{max-width:100%}
+.oculto{display:none!important}
+
+/* ===== Cabeçalho, conteúdo e navegação ===== */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px 6px;max-width:680px;margin:0 auto}
+.top h1{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:21px;margin:0;font-weight:800;letter-spacing:-.01em}
+.top-dir{display:flex;align-items:center;gap:8px}
+.versao{font-size:12px;color:var(--muted)}
+.modo-local{font-size:12px;background:var(--warn-bg);color:var(--warn-ink);border-radius:999px;padding:2px 8px}
+main{padding:0 16px calc(110px + env(safe-area-inset-bottom,0px));max-width:680px;margin:0 auto}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs button{background:none;border:0;padding:8px 0 10px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;color:var(--muted)}
+.tabs button[aria-current="page"]{color:var(--primary);font-weight:700}
+.tabs svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ===== Resumo da compra (total) ===== */
+.hero{background:var(--surface);border-radius:20px;padding:14px 16px 16px;margin:4px 0 10px;border:1px solid var(--line)}
+.hero-top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.pill{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:6px 12px;font-size:14px;max-width:62%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill.vazio-pill{color:var(--muted)}
+.total-label{margin-top:12px;color:var(--muted);font-size:14px}
+.total{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-weight:800;font-size:clamp(40px,12vw,56px);line-height:1.08;letter-spacing:-.02em}
+.total span{background:linear-gradient(transparent 60%,var(--mark) 60%,var(--mark) 92%,transparent 92%);padding:0 6px;margin-left:-6px}
+.hero-sub{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:14px;margin-top:4px}
+.hero-sub b{color:var(--ink);font-weight:600}
+.orc{margin-top:12px}
+.orc-bar{height:8px;border-radius:99px;background:var(--surface-2);overflow:hidden;border:1px solid var(--line)}
+.orc-bar i{display:block;height:100%;background:var(--primary);transition:width .25s}
+.orc.alerta .orc-bar i{background:var(--danger)}
+.orc-txt{font-size:13px;color:var(--muted);margin-top:4px}
+.orc.alerta .orc-txt{color:var(--danger)}
+
+/* ===== Busca, filtros e chaves ===== */
+.busca{position:sticky;top:calc(env(safe-area-inset-top,0px) + 44px);z-index:15;background:var(--bg);padding:6px 0 8px}
+.campo{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:12px 14px;font-size:16px;outline:none;-webkit-appearance:none;appearance:none}
+.campo:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chips.quebra{flex-wrap:wrap;overflow:visible}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 12px;font-size:14px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip small{opacity:.7}
+.dot{width:9px;height:9px;border-radius:50%;flex:none;display:inline-block}
+.linha-opcoes{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 0 6px;font-size:14px;color:var(--muted);flex-wrap:wrap}
+.sw{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.sw input{position:absolute;opacity:0;width:1px;height:1px}
+.sw span{width:38px;height:22px;border-radius:99px;background:var(--line);position:relative;transition:background .15s;flex:none}
+.sw span::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--surface);transition:transform .15s}
+.sw input:checked+span{background:var(--primary)}
+.sw input:checked+span::after{transform:translateX(16px)}
+.sw input:focus-visible+span{outline:3px solid var(--primary);outline-offset:2px}
+
+/* ===== Lista de itens ===== */
+.grupo h3{font-size:14px;font-weight:600;color:var(--muted);margin:14px 2px 6px;display:flex;align-items:center;gap:8px}
+.lista{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-top:1px solid var(--line);min-height:62px}
+.item:first-child{border-top:0}
+.check{flex:none;width:30px;height:30px;border-radius:50%;border:2px solid var(--muted);background:transparent;display:grid;place-items:center;padding:0;color:var(--primary-ink)}
+.check svg{width:16px;height:16px;opacity:0;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.item.ok .check{background:var(--primary);border-color:var(--primary)}
+.item.ok .check svg{opacity:1}
+.item.ok .nome{text-decoration:line-through;color:var(--muted)}
+.thumb{flex:none;width:44px;height:44px;border-radius:10px;object-fit:cover;background:var(--surface-2);border:1px solid var(--line)}
+.thumb.sem{display:grid;place-items:center;color:var(--muted);font-size:16px;font-weight:700}
+.info{flex:1;min-width:0;cursor:pointer;background:none;border:0;padding:0;text-align:left}
+.nome{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{font-size:13px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
+.valor{flex:none;text-align:right;font-weight:600;white-space:nowrap}
+.valor.est{color:var(--muted);font-weight:500}
+.badge{font-size:12px;border-radius:6px;padding:1px 6px;background:var(--surface-2);color:var(--muted)}
+.badge.alerta{background:var(--danger-soft);color:var(--danger)}
+.badge.ok{background:var(--primary-soft);color:var(--primary)}
+.mini-add{flex:none;border:1.5px solid var(--primary-line);background:var(--primary-soft);color:var(--primary);border-radius:10px;padding:8px 12px;font-weight:600;font-size:14px}
+.mini-add:disabled{opacity:.55}
+.ocultos{margin:10px 2px;font-size:14px;color:var(--muted);display:flex;align-items:center;gap:6px}
+body.mercado .item{min-height:78px;padding:14px}
+body.mercado .nome{font-size:19px}
+body.mercado .meta{font-size:15px}
+body.mercado .check{width:42px;height:42px}
+body.mercado .check svg{width:22px;height:22px}
+body.mercado .thumb{display:none}
+body.mercado .valor{font-size:18px}
+
+/* ===== Botões ===== */
+.fab{position:fixed;right:16px;bottom:calc(74px + env(safe-area-inset-bottom,0px));z-index:25;background:var(--primary);color:var(--primary-ink);border:0;border-radius:999px;padding:14px 20px;font-weight:700;font-size:16px;box-shadow:0 6px 18px rgba(0,0,0,.2);display:flex;gap:8px;align-items:center}
+.fab svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round}
+body.mercado .fab{padding:18px 24px;font-size:18px}
+.btn{border:0;border-radius:12px;padding:12px 16px;font-weight:600;font-size:15px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn.pri{background:var(--primary);color:var(--primary-ink)}
+.btn.sec{background:var(--primary-soft);color:var(--primary);border:1.5px solid var(--primary-line)}
+.btn.sec:active,.mini-add:active{filter:brightness(.92)}
+.btn svg{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.arq{position:relative;overflow:hidden;cursor:pointer}
+.arq input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0;z-index:2}
+.btn.perigo{background:var(--danger);color:#fff}
+.btn.texto{background:none;color:var(--primary);padding:8px 4px}
+.btn.texto.perigo-txt{color:var(--danger)}
+.btn.bloco{width:100%}
+.btn:disabled{opacity:.5;cursor:default}
+.acoes-fim{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0 8px}
+.grade-btn{display:flex;flex-wrap:wrap;gap:8px}
+.grade-btn .btn{flex:1 1 140px}
+
+/* ===== Cartões, estados vazios e avisos ===== */
+.vazio{text-align:center;padding:36px 16px;color:var(--muted)}
+.vazio strong{display:block;color:var(--ink);font-size:18px;margin-bottom:6px}
+.cartao{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;margin:12px 0}
+.cartao h2{font-size:17px;margin:0 0 10px;font-family:'Bricolage Grotesque',system-ui,sans-serif;font-weight:700}
+.cartao .sub{font-size:13px;color:var(--muted);margin:-6px 0 10px}
+.cartao.sug{background:var(--warn-bg);border-color:transparent}
+.cartao.sug h2{color:var(--warn-ink)}
+.cartao.sug .chip{background:var(--surface)}
+.aviso{background:var(--warn-bg);color:var(--warn-ink);border-radius:12px;padding:10px 12px;font-size:14px;margin-top:10px}
+.aviso.perigo{background:var(--danger-soft);color:var(--danger)}
+.aviso.bom{background:var(--primary-soft);color:var(--primary)}
+.secao-titulo{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:20px;font-weight:700;margin:16px 2px 8px}
+.linha-topo{display:flex;gap:8px;margin:6px 0 4px}
+.linha-topo .btn{flex:1}
+.contagem{font-size:13px;color:var(--muted);margin:6px 2px}
+
+/* ===== Folhas (bottom sheets) ===== */
+#sheet-root{position:fixed;inset:0;z-index:50;display:none}
+#sheet-root.on{display:block}
+.scrim{position:absolute;inset:0;background:rgba(8,18,14,.5)}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:92%;background:var(--surface);border-radius:20px 20px 0 0;display:flex;flex-direction:column;max-width:680px;margin:0 auto;padding-bottom:env(safe-area-inset-bottom,0px)}
+.sheet.entra{animation:sobe .2s ease-out}
+@keyframes sobe{from{transform:translateY(24px);opacity:.5}to{transform:none;opacity:1}}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px 6px}
+.sheet-head h2{margin:0;font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:20px;line-height:1.2;overflow:hidden;text-overflow:ellipsis}
+.x{flex:none;border:0;background:var(--surface-2);width:38px;height:38px;border-radius:50%;font-size:22px;line-height:1}
+.sheet-body{overflow-y:auto;padding:6px 16px 20px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.rot{font-size:13px;color:var(--muted);margin:14px 0 6px;display:block;font-weight:500}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:10px 18px;font-weight:600}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.stepper{display:flex;align-items:center;gap:8px}
+.stepper button{flex:none;width:52px;height:52px;border-radius:12px;border:1.5px solid var(--primary-line);background:var(--primary-soft);color:var(--primary);font-size:24px;font-weight:600}
+.stepper input{flex:1;min-width:0;text-align:center;font-size:22px;font-weight:700}
+.preco-campo{position:relative}
+.preco-campo span{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-weight:600}
+.preco-campo input{padding-left:44px;font-size:22px;font-weight:700}
+.resumo-item{display:grid;grid-template-columns:1fr auto;gap:6px 12px;background:var(--surface-2);border-radius:12px;padding:12px;margin-top:14px;font-size:15px}
+.resumo-item strong{text-align:right}
+.hist{font-size:14px;color:var(--muted);margin-top:10px}
+.hist div{display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-top:1px dashed var(--line)}
+.sheet-acoes{display:grid;gap:10px;margin-top:16px}
+.sheet-acoes.duas{grid-template-columns:1fr 1fr}
+.cab-prod{display:flex;gap:12px;align-items:center;margin-bottom:4px}
+.cab-prod img,.cab-prod .thumb{width:64px;height:64px;border-radius:12px}
+.cab-prod .meta{font-size:14px}
+.foto-area{display:flex;gap:12px;align-items:center}
+.foto-prev{flex:none;width:104px;height:104px;border-radius:14px;object-fit:cover;background:var(--surface-2);border:1px dashed var(--muted);display:grid;place-items:center;color:var(--muted);font-size:12px;text-align:center;padding:6px}
+.foto-btns{display:flex;flex-direction:column;gap:8px;flex:1}
+.ia-status{margin-top:10px;font-size:14px;display:flex;align-items:center;gap:10px}
+.spin{width:18px;height:18px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--primary);animation:gira .8s linear infinite;flex:none}
+@keyframes gira{to{transform:rotate(360deg)}}
+.campo-linha{display:flex;gap:8px}
+.campo-linha .campo{flex:1}
+.res-linha{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.res-linha:first-child{border-top:0}
+.res-linha .info{cursor:default}
+.res-linha button.info{cursor:pointer}
+
+/* ===== Modal e aviso rápido ===== */
+#modal-root{position:fixed;inset:0;z-index:70;display:none;place-items:center;background:rgba(8,18,14,.5);padding:20px}
+#modal-root.on{display:grid}
+.modal{background:var(--surface);border-radius:18px;padding:18px;width:100%;max-width:380px}
+.modal p{margin:0 0 14px;font-size:16px}
+.modal h3{margin:0 0 10px;font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:19px}
+.modal-acoes{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px}
+.modal-acoes.col{flex-direction:column}
+.modal-acoes.col .btn{width:100%}
+#toast{position:fixed;left:50%;bottom:calc(132px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:80;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;max-width:calc(100% - 32px);display:none;align-items:center;gap:12px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+#toast.on{display:flex}
+#toast button{background:none;border:0;color:var(--mark);font-weight:700;padding:0}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #toast button{color:#F7CB52}}
+.carregando{display:grid;place-items:center;gap:14px;padding:80px 0;color:var(--muted)}
+
+/* ===== Relatórios ===== */
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:10px 0}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.stat small{display:block;color:var(--muted);font-size:13px}
+.stat b{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:22px;font-weight:800}
+.grafico svg{width:100%;height:auto;display:block;overflow:visible}
+.grafico .ax{fill:var(--muted);font-size:10px;font-family:'Figtree',sans-serif}
+.grafico .vl{fill:var(--ink);font-size:10px;font-weight:600;font-family:'Figtree',sans-serif}
+.barra-h{display:grid;grid-template-columns:minmax(90px,38%) 1fr auto;gap:8px;align-items:center;font-size:14px;margin:7px 0}
+.barra-h .trilho{height:12px;background:var(--surface-2);border-radius:99px;overflow:hidden}
+.barra-h .trilho i{display:block;height:100%;border-radius:99px}
+.barra-h .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.barra-h .vl{font-weight:600;white-space:nowrap}
+.tabela-wrap{overflow-x:auto}
+.tab{width:100%;border-collapse:collapse;font-size:14px}
+.tab th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;padding:6px 4px;border-bottom:1px solid var(--line)}
+.tab td{padding:8px 4px;border-bottom:1px solid var(--line);vertical-align:top}
+.tab tr:last-child td{border-bottom:0}
+.num{text-align:right!important;white-space:nowrap}
+.melhor{color:var(--primary);font-weight:700}
+.compra-linha{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line);width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left}
+.compra-linha:first-of-type{border-top:0}
+.compra-linha small{display:block;color:var(--muted);font-size:13px}
+
+/* ===== Ajustes ===== */
+.link-app{font-size:13px;word-break:break-all;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px;user-select:all;-webkit-user-select:all;margin-top:8px}
+.cfg-linha{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.cfg-linha:first-child{border-top:0}
+.cfg-linha .campo{padding:9px 12px}
+.cor-btn{flex:none;width:30px;height:30px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line)}
+.ico-btn{flex:none;border:1px solid var(--line);background:var(--surface-2);border-radius:10px;width:40px;height:40px;display:grid;place-items:center}
+.ico-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.log{font-size:13px;color:var(--muted)}
+.log div{padding:6px 0;border-top:1px solid var(--line)}
+.log div:first-child{border-top:0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:14px}
+.kv span{color:var(--muted)}
+
+/* ===== Leitor de código ao vivo ===== */
+#scanner-root{position:fixed;inset:0;z-index:90;background:#000;display:none}
+#scanner-root.on{display:block}
+#scVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.sc-mira{position:absolute;left:10%;right:10%;top:34%;height:22%;border:3px solid #F7CB52;border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.4)}
+.sc-topo{position:absolute;top:calc(env(safe-area-inset-top,0px) + 18px);left:16px;right:16px;text-align:center;color:#fff;font-weight:600;font-size:17px;text-shadow:0 1px 3px #000}
+.sc-acoes{position:absolute;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 20px);display:grid;gap:10px}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Compras da casa</h1>
+  <div class="top-dir"><span class="versao" id="versao"></span></div>
+</header>
+<main id="view"><div class="carregando"><div class="spin"></div>Carregando suas compras</div></main>
+<nav class="tabs" id="tabs" aria-label="Seções">
+  <button data-a="tab" data-v="lista"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>Lista</button>
+  <button data-a="tab" data-v="produtos"><svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>Produtos</button>
+  <button data-a="tab" data-v="relatorios"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Relatórios</button>
+  <button data-a="tab" data-v="ajustes"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Ajustes</button>
+</nav>
+<div id="sheet-root"></div>
+<div id="scanner-root" role="dialog" aria-label="Leitor de código de barras"></div>
+<div id="modal-root"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script>
+'use strict';
+/* =========================================================
+   LISTA INICIAL (aplicada só na primeira abertura, com o banco vazio)
+   ========================================================= */
+const SEMENTE = {
+ "produtos": [
+  {
+   "id": "arroz-parboilizado",
+   "nome": "Arroz parboilizado",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "mercearia",
+   "medida": "kg",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "feijao",
+   "nome": "Feijão",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "mercearia",
+   "medida": "kg",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "leite",
+   "nome": "Leite",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "geladeira",
+   "medida": "L",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "oleo",
+   "nome": "Óleo",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "mercearia",
+   "medida": "L",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "cafe",
+   "nome": "Café",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "mercearia",
+   "medida": "kg",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "acucar",
+   "nome": "Açúcar",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "mercearia",
+   "medida": "kg",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "pao-forma-pullman",
+   "nome": "Pão de forma Pullman",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "padaria",
+   "medida": "un",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "margarina",
+   "nome": "Margarina",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "geladeira",
+   "medida": "kg",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "requeijao",
+   "nome": "Requeijão",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "geladeira",
+   "medida": "kg",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "macarrao",
+   "nome": "Macarrão",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "mercearia",
+   "medida": "kg",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "massa-tomate",
+   "nome": "Massa de tomate",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "mercearia",
+   "medida": "kg",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "fuba",
+   "nome": "Fubá",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "mercearia",
+   "medida": "kg",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "milho-pipoca",
+   "nome": "Milho de pipoca",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "mercearia",
+   "medida": "kg",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "farinha-trigo",
+   "nome": "Farinha de trigo",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "mercearia",
+   "medida": "kg",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "sabao-po",
+   "nome": "Sabão em pó",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "limpeza",
+   "medida": "kg",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "sabao-liquido-3l",
+   "nome": "Sabão líquido 3 L",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "limpeza",
+   "medida": "L",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "sabao-liquido-coco-3l",
+   "nome": "Sabão líquido de coco 3 L",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "limpeza",
+   "medida": "L",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "amaciante",
+   "nome": "Amaciante",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "limpeza",
+   "medida": "L",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "amaciante-bebe",
+   "nome": "Amaciante bebê",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "limpeza",
+   "medida": "L",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "agua-sanitaria",
+   "nome": "Água sanitária",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "limpeza",
+   "medida": "L",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "desinfetante",
+   "nome": "Desinfetante",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "limpeza",
+   "medida": "L",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "batata",
+   "nome": "Batata",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "kg",
+   "categoriaId": "hortifruti",
+   "medida": "kg",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "tomate",
+   "nome": "Tomate",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "hortifruti",
+   "medida": "un",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "alface",
+   "nome": "Alface",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "hortifruti",
+   "medida": "un",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "repolho",
+   "nome": "Repolho",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "hortifruti",
+   "medida": "un",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "alho",
+   "nome": "Alho",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "hortifruti",
+   "medida": "un",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  },
+  {
+   "id": "cenoura",
+   "nome": "Cenoura",
+   "marca": "",
+   "tamanho": "",
+   "unidade": "un",
+   "categoriaId": "hortifruti",
+   "medida": "un",
+   "codigo": "",
+   "fotoId": null,
+   "fotoData": null
+  }
+ ],
+ "compra": {
+  "id": "lista-esposa-1",
+  "status": "aberta",
+  "mercado": "",
+  "orcamento": null,
+  "itens": [
+   {
+    "pid": "arroz-parboilizado",
+    "nome": "Arroz parboilizado",
+    "marca": "",
+    "categoriaId": "mercearia",
+    "unidade": "un",
+    "qtd": 1,
+    "preco": null,
+    "comprado": false,
+    "obs": "Camil ou Namorado",
+    "sugestao": null
+   },
+   {
+    "pid": "feijao",
+    "nome": "Feijão",
+    "marca": "",
+    "categoriaId": "mercearia",
+    "unidade": "un",
+    "qtd": 4,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": null
+   },
+   {
+    "pid": "leite",
+    "nome": "Leite",
+    "marca": "",
+    "categoriaId": "geladeira",
+    "unidade": "un",
+    "qtd": null,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": null
+   },
+   {
+    "pid": "oleo",
+    "nome": "Óleo",
+    "marca": "",
+    "categoriaId": "mercearia",
+    "unidade": "un",
+    "qtd": 2,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": null
+   },
+   {
+    "pid": "cafe",
+    "nome": "Café",
+    "marca": "",
+    "categoriaId": "mercearia",
+    "unidade": "un",
+    "qtd": null,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": null
+   },
+   {
+    "pid": "acucar",
+    "nome": "Açúcar",
+    "marca": "",
+    "categoriaId": "mercearia",
+    "unidade": "un",
+    "qtd": null,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": null
+   },
+   {
+    "pid": "pao-forma-pullman",
+    "nome": "Pão de forma Pullman",
+    "marca": "",
+    "categoriaId": "padaria",
+    "unidade": "un",
+    "qtd": null,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": null
+   },
+   {
+    "pid": "margarina",
+    "nome": "Margarina",
+    "marca": "",
+    "categoriaId": "geladeira",
+    "unidade": "un",
+    "qtd": null,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": null
+   },
+   {
+    "pid": "requeijao",
+    "nome": "Requeijão",
+    "marca": "",
+    "categoriaId": "geladeira",
+    "unidade": "un",
+    "qtd": null,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": null
+   },
+   {
+    "pid": "macarrao",
+    "nome": "Macarrão",
+    "marca": "",
+    "categoriaId": "mercearia",
+    "unidade": "un",
+    "qtd": 4,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": null
+   },
+   {
+    "pid": "massa-tomate",
+    "nome": "Massa de tomate",
+    "marca": "",
+    "categoriaId": "mercearia",
+    "unidade": "un",
+    "qtd": null,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": null
+   },
+   {
+    "pid": "fuba",
+    "nome": "Fubá",
+    "marca": "",
+    "categoriaId": "mercearia",
+    "unidade": "un",
+    "qtd": null,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": null
+   },
+   {
+    "pid": "milho-pipoca",
+    "nome": "Milho de pipoca",
+    "marca": "",
+    "categoriaId": "mercearia",
+    "unidade": "un",
+    "qtd": null,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": null
+   },
+   {
+    "pid": "farinha-trigo",
+    "nome": "Farinha de trigo",
+    "marca": "",
+    "categoriaId": "mercearia",
+    "unidade": "un",
+    "qtd": null,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": null
+   },
+   {
+    "pid": "sabao-po",
+    "nome": "Sabão em pó",
+    "marca": "",
+    "categoriaId": "limpeza",
+    "unidade": "un",
+    "qtd": null,
+    "preco": null,
+    "comprado": false,
+    "obs": "Tixan ou Brilhante",
+    "sugestao": null
+   },
+   {
+    "pid": "sabao-liquido-3l",
+    "nome": "Sabão líquido 3 L",
+    "marca": "",
+    "categoriaId": "limpeza",
+    "unidade": "un",
+    "qtd": 1,
+    "preco": null,
+    "comprado": false,
+    "obs": "Marca Ual",
+    "sugestao": null
+   },
+   {
+    "pid": "sabao-liquido-coco-3l",
+    "nome": "Sabão líquido de coco 3 L",
+    "marca": "",
+    "categoriaId": "limpeza",
+    "unidade": "un",
+    "qtd": 1,
+    "preco": null,
+    "comprado": false,
+    "obs": "O mais barato",
+    "sugestao": null
+   },
+   {
+    "pid": "amaciante",
+    "nome": "Amaciante",
+    "marca": "",
+    "categoriaId": "limpeza",
+    "unidade": "un",
+    "qtd": null,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": null
+   },
+   {
+    "pid": "amaciante-bebe",
+    "nome": "Amaciante bebê",
+    "marca": "",
+    "categoriaId": "limpeza",
+    "unidade": "un",
+    "qtd": null,
+    "preco": null,
+    "comprado": false,
+    "obs": "Comfort",
+    "sugestao": null
+   },
+   {
+    "pid": "agua-sanitaria",
+    "nome": "Água sanitária",
+    "marca": "",
+    "categoriaId": "limpeza",
+    "unidade": "un",
+    "qtd": null,
+    "preco": null,
+    "comprado": false,
+    "obs": "Cândida",
+    "sugestao": null
+   },
+   {
+    "pid": "desinfetante",
+    "nome": "Desinfetante",
+    "marca": "",
+    "categoriaId": "limpeza",
+    "unidade": "un",
+    "qtd": null,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": null
+   },
+   {
+    "pid": "batata",
+    "nome": "Batata",
+    "marca": "",
+    "categoriaId": "hortifruti",
+    "unidade": "kg",
+    "qtd": 1,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": "Quitanda do Centro"
+   },
+   {
+    "pid": "tomate",
+    "nome": "Tomate",
+    "marca": "",
+    "categoriaId": "hortifruti",
+    "unidade": "un",
+    "qtd": null,
+    "preco": null,
+    "comprado": false,
+    "obs": "Bandeja",
+    "sugestao": "Quitanda do Centro"
+   },
+   {
+    "pid": "alface",
+    "nome": "Alface",
+    "marca": "",
+    "categoriaId": "hortifruti",
+    "unidade": "un",
+    "qtd": 1,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": "Quitanda do Centro"
+   },
+   {
+    "pid": "repolho",
+    "nome": "Repolho",
+    "marca": "",
+    "categoriaId": "hortifruti",
+    "unidade": "un",
+    "qtd": 1,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": "Quitanda do Centro"
+   },
+   {
+    "pid": "alho",
+    "nome": "Alho",
+    "marca": "",
+    "categoriaId": "hortifruti",
+    "unidade": "un",
+    "qtd": 1,
+    "preco": null,
+    "comprado": false,
+    "obs": "Cabeça",
+    "sugestao": "Quitanda do Centro"
+   },
+   {
+    "pid": "cenoura",
+    "nome": "Cenoura",
+    "marca": "",
+    "categoriaId": "hortifruti",
+    "unidade": "un",
+    "qtd": 3,
+    "preco": null,
+    "comprado": false,
+    "obs": null,
+    "sugestao": "Quitanda do Centro"
+   }
+  ]
+ },
+ "mercados": [
+  "Quitanda do Centro"
+ ]
+};
+</script>
+<script>
+'use strict';
+/* =========================================================
+   CONSTANTES
+   ========================================================= */
+const VERSAO = 'v2.0.0';
+// bibliotecas guardadas no próprio repositório (funcionam sem internet)
+const URL_ZXING = 'lib/zxing.min.js';
+const URL_JSPDF = 'lib/jspdf.umd.min.js';
+const URL_AUTOTABLE = 'lib/jspdf.plugin.autotable.min.js';
+const URL_XLSX = 'lib/xlsx.full.min.js';
+
+/** Categorias criadas na primeira abertura (editáveis em Ajustes). */
+const CATEGORIAS_PADRAO = [
+  ['geladeira','Geladeira','#3B82C4'],
+  ['doces','Doces e guloseimas','#D04F95'],
+  ['lanches','Lanches das meninas','#E08A2E'],
+  ['limpeza','Limpeza','#21A0A0'],
+  ['higiene','Higiene','#8A6FD1'],
+  ['hortifruti','Hortifruti','#4E9A3A'],
+  ['acougue','Açougue','#C2412D'],
+  ['padaria','Padaria','#B0823A'],
+  ['bebidas','Bebidas','#3D6FD8'],
+  ['mercearia','Mercearia','#7C7A5A'],
+].map(([id,nome,cor]) => ({id, nome, cor}));
+const CORES = ['#3B82C4','#D04F95','#E08A2E','#21A0A0','#8A6FD1','#4E9A3A','#C2412D','#B0823A','#3D6FD8','#7C7A5A','#5B6B73','#C9A227'];
+const SEM_CAT = {id:null, nome:'Sem categoria', cor:'#8A938F'};
+
+/* =========================================================
+   UTILITÁRIOS (formatação, texto, ids)
+   ========================================================= */
+const $ = (s, r=document) => r.querySelector(s);
+/** Escapa qualquer texto antes de ir para o HTML. */
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const brl = new Intl.NumberFormat('pt-BR', {style:'currency', currency:'BRL'});
+const fmt = v => brl.format(Number.isFinite(v) ? v : 0);
+const fmtNum2 = v => (Number.isFinite(v) ? v : 0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtQtd = (q, un) => (Number.isFinite(q) ? q : 0).toLocaleString('pt-BR', {maximumFractionDigits:3}) + (un === 'kg' ? ' kg' : ' un');
+/** Valor curto para eixos de gráfico. */
+const curto = v => v >= 1000 ? 'R$ ' + (v/1000).toLocaleString('pt-BR', {maximumFractionDigits:1}) + ' mil' : 'R$ ' + Math.round(v);
+/** Converte "12,90" ou "1.234,50" em número. */
+function parseNum(s){
+  if (typeof s === 'number') return s;
+  s = String(s || '').trim().replace(/\s|R\$/g, '');
+  if (!s) return NaN;
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+}
+const r2 = n => Math.round(n * 100) / 100;
+const r3 = n => Math.round(n * 1000) / 1000;
+/** Normaliza para busca: minúsculas e sem acentos. */
+const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+const novoId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const clone = o => JSON.parse(JSON.stringify(o));
+const fmtData = ts => new Date(ts).toLocaleDateString('pt-BR');
+const fmtDataCurta = ts => new Date(ts).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
+const mesChave = ts => { const d = new Date(ts); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); };
+const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const mesNome = k => { const [y,m] = k.split('-'); return MESES[Number(m)-1] + '/' + y.slice(2); };
+const svgCheck = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
+/* =========================================================
+   ESTADO DA TELA (persistido no aparelho, para manter a tela ao recarregar)
+   ========================================================= */
+const UI = {tab:'lista', ocultarComprados:true, modoMercado:false, filtroCat:'', catProdutos:'', periodo:'3m', produtoGrafico:null};
+let buscaLista = '', buscaProdutos = '';
+function carregarUI(){ try { Object.assign(UI, JSON.parse(localStorage.getItem('compras.ui') || '{}')); } catch {} }
+function salvarUI(){ try { localStorage.setItem('compras.ui', JSON.stringify(UI)); } catch {} }
+function salvarScroll(){ try { sessionStorage.setItem('compras.scroll.' + UI.tab, String(window.scrollY)); } catch {} }
+function lerScroll(){ try { return Number(sessionStorage.getItem('compras.scroll.' + UI.tab) || 0); } catch { return 0; } }
+
+/* =========================================================
+   RECURSOS DO APARELHO (download de arquivos)
+   ========================================================= */
+/** Mantém a mesma interface usada pelas telas; no app próprio não há IA nem armazenamento externo. */
+const Cap = {
+  sample: null, imagens: false, assets: null,
+  downloads: {
+    /** Entrega um arquivo gerado no aparelho como download comum. */
+    save({filename, data}){
+      const blob = data instanceof Blob ? data : new Blob([data]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = filename; a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 15000);
+      return Promise.resolve({status: 'saved'});
+    },
+  },
+};
+
+/* =========================================================
+   BANCO NO APARELHO (IndexedDB)
+   ========================================================= */
+const BD = {
+  db: null,
+  /** Abre (ou cria) o banco local com as tabelas do app. */
+  abrir(){
+    return new Promise((ok, falha) => {
+      const r = indexedDB.open('compras-da-casa', 1);
+      r.onupgradeneeded = () => { const d = r.result; for (const t of ['produtos', 'compras', 'cfg']) if (!d.objectStoreNames.contains(t)) d.createObjectStore(t); };
+      r.onsuccess = () => { this.db = r.result; ok(); };
+      r.onerror = () => falha(r.error);
+    });
+  },
+  /** Executa uma operação e resolve quando a transação termina. */
+  _op(tabela, modo, fn){
+    return new Promise((ok, falha) => {
+      const t = this.db.transaction(tabela, modo); const req = fn(t.objectStore(tabela));
+      t.oncomplete = () => ok(req ? req.result : undefined); t.onerror = () => falha(t.error); t.onabort = () => falha(t.error);
+    });
+  },
+  todos(tabela){ return this._op(tabela, 'readonly', st => st.getAll()).then(r => r || []); },
+  ler(tabela, chave){ return this._op(tabela, 'readonly', st => st.get(chave)); },
+  gravar(tabela, chave, valor){ return this._op(tabela, 'readwrite', st => { st.put(valor, chave); }); },
+  apagar(tabela, chave){ return this._op(tabela, 'readwrite', st => { st.delete(chave); }); },
+};
+
+/* =========================================================
+   CAMADA DE DADOS (memória + banco do aparelho)
+   ========================================================= */
+const Dados = {
+  modo: 'local', produtos: new Map(), compras: new Map(), cfg: null,
+
+  /** Configuração inicial. */
+  cfgPadrao(){ return {categorias: clone(CATEGORIAS_PADRAO), mercados: [], alertaPct: 15, logSeg: []}; },
+  /** Garante todos os campos da configuração. */
+  completarCfg(c){ const p = this.cfgPadrao(); return Object.assign(p, c || {}); },
+
+  /** Carrega tudo do banco do aparelho para a memória. */
+  async iniciar(){
+    await BD.abrir();
+    const [ps, cs, cfg] = await Promise.all([BD.todos('produtos'), BD.todos('compras'), BD.ler('cfg', 'principal')]);
+    ps.forEach(p => this.produtos.set(p.id, p)); cs.forEach(c => this.compras.set(c.id, c));
+    this.cfg = this.completarCfg(cfg);
+    if (!cfg) await BD.gravar('cfg', 'principal', this.cfg);
+    return {vazio: !ps.length && !cs.length};
+  },
+
+  _gravar(tabela, id, obj){ BD.gravar(tabela, id, obj).catch(falhaGravacao); },
+  _apagar(tabela, id){ BD.apagar(tabela, id).catch(falhaGravacao); },
+
+  salvarProduto(p){ p.atualizadoEm = Date.now(); this.produtos.set(p.id, p); this._gravar('produtos', p.id, p); agendarRender(); },
+  excluirProduto(id){ this.produtos.delete(id); this._apagar('produtos', id); agendarRender(); },
+  salvarCompra(c){ this.compras.set(c.id, c); this._gravar('compras', c.id, c); agendarRender(); },
+  excluirCompra(id){ this.compras.delete(id); this._apagar('compras', id); agendarRender(); },
+  /** Altera a configuração a partir de uma cópia. */
+  salvarCfg(fn){ const c = clone(this.cfg); fn(c); this.cfg = c; this._gravar('cfg', 'principal', c); agendarRender(); },
+  /** Grava um produto e aguarda a confirmação do banco. */
+  async gravarProduto(p){ this.produtos.set(p.id, p); await BD.gravar('produtos', p.id, p); },
+
+  /** Importa um backup gravando um registro por vez. */
+  async importar(produtos, compras){
+    for (const p of produtos) { this.produtos.set(p.id, p); await BD.gravar('produtos', p.id, p); }
+    for (const c of compras) { this.compras.set(c.id, c); await BD.gravar('compras', c.id, c); }
+    agendarRender();
+  },
+};
+/** Aviso de falha de gravação. */
+function falhaGravacao(e){
+  if (e && e.name === 'QuotaExceededError') toast('Armazenamento do aparelho cheio. Exclua fotos ou compras antigas.');
+  else toast('Não foi possível salvar no aparelho. Tente de novo.');
+}
+
+/* =========================================================
+   SEGURANÇA (detector de texto suspeito e registro)
+   ========================================================= */
+/** Padrões de texto com aparência de instrução (PT e EN). */
+const PADROES_SUSPEITOS = [
+  /ignor(e|ar|em|ando|a)\b/i, /desconsider/i, /disregard/i, /\bprompt\b/i, /instru[cç](ão|ões|ao|oes)/i, /instruction/i,
+  /\bsystem\b/i, /\bsistema\s*:/i, /voc[eê]\s+(é|e)\s+agora/i, /you\s+are\s+now/i, /\bact\s+as\b/i, /aja\s+como/i, /\bfinja\b/i,
+  /responda\s+(com|apenas|somente)/i, /respond\s+(with|only)/i, /<\s*\/?\s*script/i, /javascript:/i, /https?:\/\//i, /\bwww\./i,
+  /[{}<>]/, /api[\s_-]?key|senha|password|token/i, /envi(e|ar)\s+(para|e-?mail)/i, /\bsend\s+(to|an?\s+e-?mail)/i, /\bexclu(a|ir)\b/i, /\bdelete\b/i,
+];
+/** Retorna a descrição do primeiro padrão suspeito encontrado, ou null. */
+function detectarSuspeito(texto){
+  for (const re of PADROES_SUSPEITOS) { const m = String(texto || '').match(re); if (m) return 'padrão "' + m[0].slice(0, 40) + '"'; }
+  return null;
+}
+/** Registra evento de segurança (sem dados sensíveis, máx. 50 eventos). */
+function registrarSeg(tipo, detalhe){
+  try { Dados.salvarCfg(c => { c.logSeg = [{em: Date.now(), tipo, detalhe: String(detalhe).slice(0, 140)}, ...(c.logSeg || [])].slice(0, 50); }); } catch {}
+}
+/* =========================================================
+   LUGARES DE COMPRA (correção de nomes digitados)
+   ========================================================= */
+/** Distância de edição entre dois textos (para corrigir "Quitando" → "Quitanda"). */
+function distancia(a, b){
+  const m = a.length, n = b.length; const d = Array.from({length: m + 1}, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 1; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+  return d[m][n];
+}
+/** Aproxima um nome de lugar a um mercado já cadastrado; senão devolve o nome limpo. */
+function corrigirLugar(nome){
+  const limpo = String(nome || '').replace(/[*_#:]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (!limpo) return null;
+  const n = norm(limpo); let melhor = null, dist = 99;
+  for (const m of Dados.cfg.mercados) { const d = distancia(n, norm(m)); if (d < dist) { dist = d; melhor = m; } }
+  if (melhor && dist <= Math.max(2, Math.floor(n.length * 0.15))) return melhor;
+  return limpo.replace(/(^|\s)(\p{L})/gu, (x, e, l) => e + l.toUpperCase());
+}
+
+/* =========================================================
+   COLAR LISTA (leitura no aparelho)
+   ========================================================= */
+const LIMITE_LISTA = 4000;
+const capitalizar = s => { s = String(s || '').trim(); return s.charAt(0).toUpperCase() + s.slice(1); };
+/** Procura produto do catálogo com o mesmo nome (sem acentos). */
+const acharProdutoPorNome = nome => [...Dados.produtos.values()].find(p => norm(p.nome) === norm(nome)) || null;
+/** Leitura da lista: quantidade no início, observação entre parênteses, *título* vira lugar. */
+function lerListaLocal(texto){
+  const out = []; let lugar = null;
+  String(texto).split(/\r?\n/).forEach((bruta, idx) => {
+    let l = bruta.trim(); if (!l) return;
+    const tit = l.match(/^\*+\s*(.+?)\s*\*+$/) || l.match(/^#+\s*(.+)$/) || l.match(/^([^()\d]{3,40}):$/);
+    if (tit) { lugar = corrigirLugar(tit[1]); return; }
+    l = l.replace(/^[-•·]\s*/, '');
+    const obs = []; l = l.replace(/\(([^)]*)\)/g, (_, x) => { if (x.trim()) obs.push(x.trim()); return ' '; }).replace(/\s+/g, ' ').trim();
+    let qtd = null, unidade = 'un';
+    const mq = l.match(/^(\d+(?:[.,]\d+)?)\s*(kg|g|pcts?|pacotes?|un|unid\.?|unidades?|cx|caixas?|latas?|garrafas?|bandejas?)?\.?\s+(.+)$/i);
+    if (mq) { qtd = parseNum(mq[1]); const u = (mq[2] || '').toLowerCase(); if (u === 'kg') unidade = 'kg'; if (u === 'g') { unidade = 'kg'; qtd = r3(qtd / 1000); } l = mq[3]; }
+    if (!l) return;
+    const p = acharProdutoPorNome(l);
+    out.push({linha: idx + 1, nome: capitalizar(l).slice(0, 60), qtd: qtd > 0 ? qtd : null, unidade: p ? (p.unidade || 'un') : unidade, obs: obs.join('; ').slice(0, 80) || null, categoriaId: p ? catDoProduto(p) : null, lugar, pid: p ? p.id : null, incluir: true});
+  });
+  return out;
+}
+/* =========================================================
+   COMPARADOR DE EMBALAGENS (preço por unidade de medida)
+   ========================================================= */
+/** Medidas de comparação e suas subunidades (fator para a unidade base). */
+const MEDIDAS = {
+  kg:  {rotulo: 'Peso', base: 'kg', subs: [['g', 0.001], ['kg', 1]], padrao: 'g'},
+  L:   {rotulo: 'Volume', base: 'L', subs: [['ml', 0.001], ['L', 1]], padrao: 'ml'},
+  m:   {rotulo: 'Metros', base: 'm', subs: [['m', 1]], padrao: 'm'},
+  un:  {rotulo: 'Unidades', base: 'un', subs: [['un', 1]], padrao: 'un'},
+  lav: {rotulo: 'Lavagens/doses', base: 'lavagem', subs: [['lavagens', 1]], padrao: 'lavagens'},
+};
+const medidaPadrao = p => (p && MEDIDAS[p.medida]) ? p.medida : (p && p.unidade === 'kg' ? 'kg' : 'un');
+/** Calcula preço efetivo da embalagem (com promoção) e preço por unidade de medida. */
+function calcularOpcao(o, medida){
+  const M = MEDIDAS[medida]; const preco = parseNum(o.preco); const qe = medida === 'lav' ? 1 : (parseNum(o.qtdEmb) || 1);
+  const tam = medida === 'un' ? 1 : parseNum(o.tam); const sub = (M.subs.find(s => s[0] === o.sub) || M.subs[M.subs.length - 1])[1];
+  if (!(preco > 0) || !(tam > 0) || !(qe > 0)) return null;
+  let precoEf = preco, levar = 1;
+  if (o.promo === 'leve') { const L = parseNum(o.leveL), P = parseNum(o.leveP); if (L > 0 && P > 0 && P < L) { precoEf = preco * P / L; levar = L; } }
+  if (o.promo === 'segunda') { const pct = parseNum(o.segPct); if (pct > 0 && pct <= 100) { precoEf = preco * (2 - pct / 100) / 2; levar = 2; } }
+  const total = qe * tam * sub;
+  return {precoEf, levar, total, unit: precoEf / total};
+}
+/** Preço por unidade com casas suficientes para valores pequenos. */
+const fmtUnit = v => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: v < 1 ? 4 : 2});
+
+/* =========================================================
+   IMAGENS (escolha, compressão e gravação)
+   ========================================================= */
+/** Reduz a imagem para o tamanho máximo informado (JPEG). */
+async function comprimir(arquivo, max, qualidade){
+  let fonte, w, h;
+  try { fonte = await createImageBitmap(arquivo, {imageOrientation:'from-image'}); w = fonte.width; h = fonte.height; }
+  catch {
+    fonte = await new Promise((ok, falha) => { const im = new Image(); im.onload = () => ok(im); im.onerror = falha; im.src = URL.createObjectURL(arquivo); });
+    w = fonte.naturalWidth; h = fonte.naturalHeight;
+  }
+  const s = Math.min(1, max / Math.max(w, h));
+  const cv = document.createElement('canvas'); cv.width = Math.round(w * s); cv.height = Math.round(h * s);
+  cv.getContext('2d').drawImage(fonte, 0, 0, cv.width, cv.height);
+  return new Promise(ok => cv.toBlob(b => ok(b), 'image/jpeg', qualidade));
+}
+const blobParaDataUrl = b => new Promise((ok, falha) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = falha; r.readAsDataURL(b); });
+/** Guarda a foto comprimida dentro do próprio produto (banco do aparelho). */
+async function salvarFoto(arquivo){
+  const b = await comprimir(arquivo, 640, 0.75);
+  return {fotoId: null, fotoData: await blobParaDataUrl(b)};
+}
+/** Endereço seguro da foto do produto. */
+function fotoUrl(p){
+  if (!p) return null;
+  if (p.fotoId && /^[0-9a-f]{32}$/.test(p.fotoId)) return '/_blob/' + p.fotoId;
+  if (typeof p.fotoData === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(p.fotoData)) return p.fotoData;
+  return null;
+}
+/** Miniatura do produto (foto ou inicial). */
+function thumbHTML(p, nome){
+  const u = fotoUrl(p);
+  if (u) return `<img class="thumb" src="${esc(u)}" alt="" loading="lazy">`;
+  return `<span class="thumb sem" aria-hidden="true">${esc((nome || '?').trim().charAt(0).toUpperCase())}</span>`;
+}
+
+/* =========================================================
+   CÓDIGO DE BARRAS (validação, foto e câmera ao vivo)
+   ========================================================= */
+const _scripts = {};
+/** Carrega uma biblioteca externa uma única vez. */
+function carregarScript(src){
+  if (!_scripts[src]) _scripts[src] = new Promise((ok, falha) => {
+    const s = document.createElement('script'); s.src = src; s.async = true;
+    s.onload = ok; s.onerror = () => { delete _scripts[src]; falha(new Error('script')); };
+    document.head.appendChild(s);
+  });
+  return _scripts[src];
+}
+/** Tenta decodificar o código de barras de uma foto. */
+async function decodificarCodigo(arquivo){
+  try {
+    if ('BarcodeDetector' in window) {
+      const bd = new window.BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf']});
+      const bmp = await createImageBitmap(arquivo);
+      const r = await bd.detect(bmp);
+      const v = r && r[0] && r[0].rawValue;
+      if (v && gtinValido(v)) return v;
+    }
+  } catch {}
+  try {
+    await carregarScript(URL_ZXING);
+    const Z = window.ZXing;
+    const hints = new Map();
+    hints.set(Z.DecodeHintType.TRY_HARDER, true);
+    hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E, Z.BarcodeFormat.CODE_128, Z.BarcodeFormat.ITF]);
+    const reader = new Z.BrowserMultiFormatReader(hints);
+    for (const max of [1400, 900]) {
+      const b = await comprimir(arquivo, max, 0.92);
+      const url = URL.createObjectURL(b);
+      try { const r = await reader.decodeFromImageUrl(url); const v = r && r.getText(); if (v && gtinValido(v)) return v; }
+      catch {} finally { URL.revokeObjectURL(url); }
+    }
+  } catch {}
+  return null;
+}
+/** Confere o dígito verificador de códigos EAN-8, UPC-A, EAN-13 e GTIN-14. */
+function gtinValido(c){
+  if (!/^\d{8}$|^\d{12,14}$/.test(c)) return false;
+  const d = c.split('').map(Number); const dv = d.pop(); let soma = 0;
+  d.reverse().forEach((n, i) => { soma += n * (i % 2 === 0 ? 3 : 1); });
+  return (10 - soma % 10) % 10 === dv;
+}
+/** Lê o código de barras de uma foto já tirada; oferece digitação se falhar. */
+async function lerCodigoDoArquivo(arq){
+  if (!arq) return null;
+  if (!/^image\//.test(arq.type || '')) { toast('Escolha uma imagem.'); return null; }
+  toast('Lendo o código…', null, 8000);
+  const cod = await decodificarCodigo(arq);
+  esconderToast();
+  if (cod) return cod;
+  const v = await escolha('Código não reconhecido', 'Tente de novo mais perto, com o código reto e bem iluminado, ou digite os números.', [{v: 'digitar', rotulo: 'Digitar o código', pri: true}]);
+  return v === 'digitar' ? digitarCodigo() : null;
+}
+/** Pede o código de barras digitado. */
+async function digitarCodigo(){
+  const t = await perguntar('Código de barras', '', {placeholder:'Somente os números', modo:'numeric', ok:'Usar'});
+  const d = (t || '').replace(/\D/g, '');
+  if (!d) return null;
+  if (!/^\d{8,14}$/.test(d)) { toast('O código deve ter de 8 a 14 dígitos.'); return null; }
+  if (/^\d{8}$|^\d{12,14}$/.test(d) && !gtinValido(d) && !(await confirmar('O dígito verificador deste código não confere. Usar mesmo assim?', 'Usar'))) return null;
+  return d;
+}
+
+/* =========================================================
+   LEITOR AO VIVO (aponte a câmera para o código)
+   ========================================================= */
+/** Abre a câmera em tela cheia e resolve com o código lido, digitado ou null. */
+function lerCodigoAoVivo(){
+  return new Promise(resolve => {
+    const root = document.getElementById('scanner-root');
+    root.innerHTML = `<video id="scVideo" playsinline muted autoplay></video><div class="sc-mira" aria-hidden="true"></div>
+      <div class="sc-topo"><span id="scMsg">Aponte para o código de barras</span></div>
+      <div class="sc-acoes">${botaoArquivo('sc-foto', 'Tirar foto do código', {camera: true, icone: 'camera'})}<button class="btn sec" id="scDigitar">${ICONES.teclado}Digitar código</button><button class="btn pri" id="scFechar">Cancelar</button></div>`;
+    root.classList.add('on'); document.body.classList.add('travado');
+    const video = root.querySelector('#scVideo'); let stream = null, laco = null, zx = null, fim = false;
+    /** Encerra câmera, leitura e tela. */
+    const terminar = (cod, resolver = true) => {
+      if (fim) return; fim = true;
+      clearInterval(laco); try { zx && zx.reset(); } catch {}
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      root.classList.remove('on'); root.innerHTML = '';
+      if (!document.querySelector('#sheet-root.on')) document.body.classList.remove('travado');
+      if (cod && navigator.vibrate) navigator.vibrate(80);
+      if (resolver) resolve(cod || null);
+    };
+    const aceitar = v => { if (v && gtinValido(String(v))) terminar(String(v)); };
+    root.querySelector('#scFechar').onclick = () => terminar(null);
+    root.querySelector('#scDigitar').onclick = async () => { terminar(null, false); resolve(await digitarCodigo()); };
+    root.querySelector('input[data-arq="sc-foto"]').addEventListener('change', async e => {
+      const arq = e.target.files && e.target.files[0]; e.stopPropagation(); if (!arq) return;
+      terminar(null, false); resolve(await lerCodigoDoArquivo(arq));
+    });
+    const msg = t => { const m = root.querySelector('#scMsg'); if (m) m.textContent = t; };
+    (async () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { msg('Câmera ao vivo indisponível. Use Tirar foto ou Digitar.'); return; }
+      try {
+        let nativo = null;
+        if ('BarcodeDetector' in window) {
+          try {
+            const fmts = await window.BarcodeDetector.getSupportedFormats();
+            const quero = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf'].filter(f => fmts.includes(f));
+            if (quero.length) nativo = new window.BarcodeDetector({formats: quero});
+          } catch {}
+        }
+        if (nativo) {
+          stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: 'environment'}, width: {ideal: 1280}}, audio: false});
+          if (fim) { stream.getTracks().forEach(t => t.stop()); return; }
+          video.srcObject = stream; await video.play().catch(() => {});
+          laco = setInterval(async () => { if (fim || video.readyState < 2) return; try { const r = await nativo.detect(video); if (r && r[0]) aceitar(r[0].rawValue); } catch {} }, 180);
+        } else {
+          msg('Carregando leitor…');
+          await carregarScript(URL_ZXING); if (fim) return;
+          const Z = window.ZXing; const hints = new Map();
+          hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E, Z.BarcodeFormat.ITF]);
+          zx = new Z.BrowserMultiFormatReader(hints);
+          msg('Aponte para o código de barras');
+          await zx.decodeFromConstraints({video: {facingMode: {ideal: 'environment'}}, audio: false}, video, r => { if (r) aceitar(r.getText()); });
+        }
+      } catch (e) {
+        msg(e && e.name === 'NotAllowedError' ? 'Permissão de câmera negada. Libere nas configurações do Chrome ou use Digitar.' : 'Não foi possível abrir a câmera. Use Tirar foto ou Digitar.');
+      }
+    })();
+  });
+}
+
+/* =========================================================
+   BOTÕES DE ARQUIVO (o toque abre a câmera/galeria direto)
+   ========================================================= */
+const ICONES = {
+  camera: '<svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  codigo: '<svg viewBox="0 0 24 24"><path d="M4 6v12M7 6v12M10 6v12M14 6v12M16 6v12M20 6v12"/></svg>',
+  teclado: '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg>',
+  galeria: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-6-6-8 8"/></svg>',
+  colar: '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/></svg>',
+  mais: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  arquivo: '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>',
+};
+/** Botão que é o próprio campo de arquivo (não depende de clique programático). */
+function botaoArquivo(acao, rotulo, {camera = false, accept = 'image/*', classe = 'sec', icone = 'camera', estilo = ''} = {}){
+  return `<label class="btn ${classe} arq" data-arq-label style="${estilo}">${ICONES[icone] || ''}<span>${esc(rotulo)}</span><input type="file" accept="${esc(accept)}" ${camera ? 'capture="environment"' : ''} data-arq="${esc(acao)}" aria-label="${esc(rotulo)}"></label>`;
+}
+let _arqTimer = null;
+/** Se nada abrir alguns segundos após o toque, avisa sobre as alternativas. */
+function vigiarSeletor(){
+  clearTimeout(_arqTimer);
+  _arqTimer = setTimeout(() => {
+    if (document.visibilityState === 'visible' && document.hasFocus()) toast('A câmera não abriu. Confira a permissão de câmera do Chrome para este app ou use Digitar código.', null, 6000);
+  }, 3500);
+}
+const pararVigia = () => clearTimeout(_arqTimer);
+window.addEventListener('blur', pararVigia);
+document.addEventListener('visibilitychange', pararVigia);
+
+/* =========================================================
+   REGRAS DE NEGÓCIO (compra aberta, preços, totais, sugestões)
+   ========================================================= */
+const categoria = id => Dados.cfg.categorias.find(c => c.id === id) || SEM_CAT;
+const catDoProduto = p => (p && p.categoriaId && Dados.cfg.categorias.some(c => c.id === p.categoriaId)) ? p.categoriaId : null;
+/** Categoria atual de um item (usa o cadastro atual do produto). */
+function catIdItem(it){ const p = Dados.produtos.get(it.pid); if (p) return catDoProduto(p); return Dados.cfg.categorias.some(c => c.id === it.categoriaId) ? it.categoriaId : null; }
+const nomeItem = it => Dados.produtos.get(it.pid)?.nome || it.nome || 'Produto';
+const unidadeItem = it => Dados.produtos.get(it.pid)?.unidade || it.unidade || 'un';
+/** Texto de busca de um produto. */
+function textoBusca(p, it){
+  const base = p || {nome: it?.nome, marca: it?.marca};
+  const cid = p ? catDoProduto(p) : catIdItem(it);
+  return norm([base.nome, base.marca, base.tamanho, categoria(cid).nome, base.codigo].join(' '));
+}
+/** Confere se todos os termos digitados aparecem no texto. */
+function casa(texto, q){ const t = norm(q).split(/\s+/).filter(Boolean); return t.every(x => texto.includes(x)); }
+
+function compraAberta(){ for (const c of Dados.compras.values()) if (c.status === 'aberta') return c; return null; }
+/** Cópia editável da compra aberta (cria uma nova se não houver). */
+function editarCompraAberta(){ const c = compraAberta(); return c ? clone(c) : {id: novoId(), status:'aberta', mercado:'', orcamento:null, criadaEm: Date.now(), itens: []}; }
+const comprasFeitas = () => [...Dados.compras.values()].filter(c => c.status === 'finalizada').sort((a, b) => b.finalizadaEm - a.finalizadaEm);
+
+/** Adiciona produto na lista atual. */
+function addNaLista(pid, qtd, extra = {}){
+  const p = Dados.produtos.get(pid); if (!p) return false;
+  const c = editarCompraAberta();
+  if (c.itens.some(i => i.pid === pid)) return false;
+  c.itens.push({pid, nome: p.nome, marca: p.marca || '', categoriaId: catDoProduto(p), unidade: p.unidade || 'un', qtd: qtd === undefined ? 1 : qtd, preco: null, comprado: false, obs: extra.obs || null, sugestao: extra.sugestao || null});
+  Dados.salvarCompra(c); return true;
+}
+
+let IDX = null;
+/** Índice de preços pagos por produto (recalculado a cada mudança). */
+function indice(){
+  if (IDX) return IDX;
+  const hist = new Map(), vezes = new Map();
+  for (const c of Dados.compras.values()) for (const it of c.itens || []) {
+    if (!it.comprado || !(it.preco > 0)) continue;
+    const a = hist.get(it.pid) || [];
+    a.push({data: it.compradoEm || c.finalizadaEm || c.criadaEm, preco: it.preco, qtd: it.qtd, mercado: it.local || c.mercado || '', compraId: c.id, finalizada: c.status === 'finalizada'});
+    hist.set(it.pid, a);
+    if (c.status === 'finalizada') vezes.set(it.pid, (vezes.get(it.pid) || 0) + 1);
+  }
+  for (const a of hist.values()) a.sort((x, y) => x.data - y.data);
+  IDX = {hist, vezes};
+  return IDX;
+}
+/** Último preço pago (ignorando a compra informada). */
+function ultimoPreco(pid, excetoCompra){ const a = (indice().hist.get(pid) || []).filter(x => x.compraId !== excetoCompra); return a.length ? a[a.length - 1].preco : null; }
+/** Média dos últimos 5 preços pagos (mínimo de 2 registros). */
+function mediaPreco(pid, excetoCompra){
+  const a = (indice().hist.get(pid) || []).filter(x => x.compraId !== excetoCompra).slice(-5);
+  if (a.length < 2) return null;
+  return a.reduce((s, x) => s + x.preco, 0) / a.length;
+}
+/** Alerta quando o preço está acima da média em mais que o limite definido. */
+function alertaPreco(pid, preco, compraId){
+  const m = mediaPreco(pid, compraId);
+  if (!m || !(preco > 0)) return null;
+  const pct = (preco - m) / m * 100;
+  return pct >= (Dados.cfg.alertaPct || 15) ? {pct, media: m} : null;
+}
+/** Totais da compra: gasto no carrinho e previsão com preços de referência. */
+function totais(c){
+  let gasto = 0, previsto = 0, comprados = 0;
+  for (const it of (c && c.itens) || []) {
+    const ref = it.comprado ? it.preco : (it.preco || ultimoPreco(it.pid, c.id) || 0);
+    const v = (it.comprado ? (it.qtd || 0) : (it.qtd || 1)) * (ref || 0);
+    if (it.comprado) { gasto += v; comprados++; }
+    previsto += v;
+  }
+  return {gasto: r2(gasto), previsto: r2(previsto), comprados, total: ((c && c.itens) || []).length};
+}
+/** Produtos que provavelmente estão acabando, pelo intervalo médio entre compras. */
+function sugestoes(){
+  const ab = compraAberta(); const naLista = new Set(((ab && ab.itens) || []).map(i => i.pid));
+  const agora = Date.now(), DIA = 86400000, out = [];
+  for (const [pid, arr] of indice().hist) {
+    if (naLista.has(pid) || !Dados.produtos.has(pid)) continue;
+    const dias = [...new Set(arr.filter(x => x.finalizada).map(x => Math.floor(x.data / DIA)))].sort((a, b) => a - b);
+    if (dias.length < 2) continue;
+    const media = (dias[dias.length - 1] - dias[0]) / (dias.length - 1);
+    if (media < 1) continue;
+    const desde = Math.floor(agora / DIA) - dias[dias.length - 1];
+    const r = desde / media;
+    if (r >= 0.9) out.push({pid, r, media: Math.round(media)});
+  }
+  return out.sort((a, b) => b.r - a.r).slice(0, 8);
+}
+/** Mais comprados primeiro, depois por nome. */
+function ordenarProdutos(lista){
+  const v = indice().vezes;
+  return lista.sort((a, b) => (v.get(b.id) || 0) - (v.get(a.id) || 0) || a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+</script>
+<script>
+'use strict';
+/* =========================================================
+   AVISOS RÁPIDOS E DIÁLOGOS
+   ========================================================= */
+let _toastT = null;
+/** Mostra um aviso rápido, com ação opcional (ex.: Desfazer). */
+function toast(msg, acao, ms = 3200){
+  if (!msg) return;
+  const t = $('#toast'); t.innerHTML = `<span>${esc(msg)}</span>` + (acao ? `<button type="button">${esc(acao.rotulo)}</button>` : '');
+  if (acao) t.querySelector('button').onclick = () => { esconderToast(); acao.fn(); };
+  t.classList.add('on'); clearTimeout(_toastT); _toastT = setTimeout(esconderToast, ms);
+}
+function esconderToast(){ $('#toast').classList.remove('on'); clearTimeout(_toastT); }
+/** Abre um diálogo e resolve com o resultado. */
+function _modal(html, ligar){
+  return new Promise(res => {
+    const r = $('#modal-root'); r.innerHTML = `<div class="modal" role="dialog" aria-modal="true">${html}</div>`; r.classList.add('on');
+    const fim = v => { r.innerHTML = ''; r.classList.remove('on'); res(v); };
+    r.onclick = e => { if (e.target === r) fim(null); };
+    ligar(r, fim);
+  });
+}
+/** Confirmação simples. */
+function confirmar(msg, ok = 'Confirmar', perigo = false){
+  return _modal(`<p>${esc(msg)}</p><div class="modal-acoes"><button class="btn sec" data-m="n">Cancelar</button><button class="btn ${perigo ? 'perigo' : 'pri'}" data-m="s">${esc(ok)}</button></div>`,
+    (r, fim) => { r.querySelector('[data-m="n"]').onclick = () => fim(false); r.querySelector('[data-m="s"]').onclick = () => fim(true); }).then(v => !!v);
+}
+/** Pede um texto. */
+function perguntar(titulo, valor = '', {placeholder = '', modo = 'text', ok = 'Salvar'} = {}){
+  return _modal(`<h3>${esc(titulo)}</h3><input class="campo" id="mIn" value="${esc(valor)}" placeholder="${esc(placeholder)}" inputmode="${esc(modo)}" autocomplete="off"><div class="modal-acoes"><button class="btn sec" data-m="n">Cancelar</button><button class="btn pri" data-m="s">${esc(ok)}</button></div>`,
+    (r, fim) => {
+      const i = r.querySelector('#mIn'); setTimeout(() => { i.focus(); i.select(); }, 50);
+      r.querySelector('[data-m="n"]').onclick = () => fim(null);
+      r.querySelector('[data-m="s"]').onclick = () => fim(i.value);
+      i.onkeydown = e => { if (e.key === 'Enter') fim(i.value); };
+    });
+}
+/** Escolha entre várias opções. */
+function escolha(titulo, texto, opcoes){
+  return _modal(`<h3>${esc(titulo)}</h3><p>${esc(texto)}</p><div class="modal-acoes col">${opcoes.map((o, i) => `<button class="btn ${o.pri ? 'pri' : 'sec'}" data-m="${i}">${esc(o.rotulo)}</button>`).join('')}<button class="btn texto" data-m="x">Cancelar</button></div>`,
+    (r, fim) => { r.querySelectorAll('[data-m]').forEach(b => b.onclick = () => fim(b.dataset.m === 'x' ? null : opcoes[Number(b.dataset.m)].v)); });
+}
+
+/* =========================================================
+   FOLHAS (bottom sheets empilháveis)
+   ========================================================= */
+const pilha = [];
+/** Abre uma folha: {titulo, html(), montar(el), acoes{}, aoFechar()}. */
+function abrirSheet(s){ pilha.push(s); s._nova = true; mostrarSheet(); }
+function fecharSheet(){ const s = pilha.pop(); if (s && s.aoFechar) s.aoFechar(); mostrarSheet(); }
+function topoSheet(){ return pilha[pilha.length - 1] || null; }
+/** Desenha a folha do topo da pilha. */
+function mostrarSheet(){
+  const root = $('#sheet-root'); const s = topoSheet();
+  if (!s) { root.innerHTML = ''; root.classList.remove('on'); document.body.classList.remove('travado'); return; }
+  const scroll = root.querySelector('.sheet-body')?.scrollTop || 0;
+  root.innerHTML = `<div class="scrim" data-a="fechar-sheet"></div><div class="sheet${s._nova ? ' entra' : ''}" role="dialog" aria-modal="true" aria-label="${esc(s.titulo)}"><div class="sheet-head"><h2>${esc(s.titulo)}</h2><button class="x" data-a="fechar-sheet" aria-label="Fechar">×</button></div><div class="sheet-body">${s.html()}</div></div>`;
+  if (!s._nova) root.querySelector('.sheet-body').scrollTop = scroll;
+  s._nova = false;
+  root.classList.add('on'); document.body.classList.add('travado');
+  if (s.montar) s.montar(root.querySelector('.sheet'));
+}
+
+/* =========================================================
+   RENDERIZAÇÃO DA TELA PRINCIPAL
+   ========================================================= */
+let _agendado = false;
+/** Agenda novo desenho (agrupa mudanças seguidas). */
+function agendarRender(){ IDX = null; if (_agendado) return; _agendado = true; requestAnimationFrame(() => { _agendado = false; render(); }); }
+const TELAS = {lista: () => telaLista(), produtos: () => telaProdutos(), relatorios: () => telaRelatorios(), ajustes: () => telaAjustes()};
+/** Desenha a aba atual preservando foco e cursor do campo de busca. */
+function render(){
+  if (!Dados.cfg) return;
+  const view = $('#view');
+  const ae = document.activeElement; const fid = ae && ae.id && view.contains(ae) ? ae.id : null;
+  const sel = fid && typeof ae.selectionStart === 'number' ? [ae.selectionStart, ae.selectionEnd] : null;
+  if (!TELAS[UI.tab]) UI.tab = 'lista';
+  view.innerHTML = TELAS[UI.tab]();
+  document.querySelectorAll('#tabs button').forEach(b => { if (b.dataset.v === UI.tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+  document.body.classList.toggle('mercado', !!UI.modoMercado);
+  if (fid) { const n = document.getElementById(fid); if (n) { n.focus({preventScroll:true}); if (sel) try { n.setSelectionRange(sel[0], sel[1]); } catch {} } }
+}
+
+/* =========================================================
+   TELA: LISTA (compra atual)
+   ========================================================= */
+/** Cabeçalho com lugar atual, orçamento e total em tempo real. */
+function heroHTML(c, t){
+  const orc = c && c.orcamento;
+  let barra = '';
+  if (orc > 0) {
+    const pct = Math.min(100, t.gasto / orc * 100);
+    const resta = orc - t.gasto, alerta = t.gasto > orc || t.previsto > orc;
+    const txt = resta >= 0 ? `Restam ${fmt(resta)} do orçamento de ${fmt(orc)}` : `Passou ${fmt(-resta)} do orçamento de ${fmt(orc)}`;
+    const prev = t.previsto > orc && resta >= 0 ? `. A previsão da lista passa em ${fmt(t.previsto - orc)}` : '';
+    barra = `<div class="orc${alerta ? ' alerta' : ''}"><div class="orc-bar"><i style="width:${pct.toFixed(1)}%"></i></div><div class="orc-txt">${txt}${prev}</div></div>`;
+  }
+  return `<section class="hero" aria-label="Resumo da compra">
+    <div class="hero-top">
+      <button class="pill${c && c.mercado ? '' : ' vazio-pill'}" data-a="mercado">${c && c.mercado ? 'Estou em ' + esc(c.mercado) : 'Onde estou agora?'}</button>
+      <button class="pill${orc ? '' : ' vazio-pill'}" data-a="orcamento">${orc ? 'Orçamento ' + fmt(orc) : 'Definir orçamento'}</button>
+    </div>
+    <div class="total-label">No carrinho</div>
+    <div class="total"><span>${fmt(t.gasto)}</span></div>
+    <div class="hero-sub"><span>Previsto <b>${fmt(t.previsto)}</b></span><span><b>${t.comprados}</b> de <b>${t.total}</b> itens</span></div>
+    ${barra}
+  </section>`;
+}
+/** Linha de um item da lista. */
+function itemHTML(it, c){
+  const p = Dados.produtos.get(it.pid); const nome = nomeItem(it); const un = unidadeItem(it);
+  const ult = it.comprado ? null : (it.preco || ultimoPreco(it.pid, c.id));
+  const al = it.comprado ? alertaPreco(it.pid, it.preco, c.id) : null;
+  const meta = [];
+  if (it.comprado && it.marcaCompra) meta.push(`<span>${esc(it.marcaCompra)}</span>`);
+  else if (it.obs) meta.push(`<span class="badge">${esc(it.obs)}</span>`);
+  else { const marca = p ? [p.marca, p.tamanho].filter(Boolean).join(' ') : it.marca; if (marca) meta.push(`<span>${esc(marca)}</span>`); }
+  if (it.comprado) meta.push(`<span>${esc(fmtQtd(it.qtd, un))} × ${fmt(it.preco)}</span>`);
+  else meta.push(`<span>${it.qtd > 0 ? esc(fmtQtd(it.qtd, un)) : 'qtd na hora'}</span>`);
+  if (it.comprado && it.local && c.mercado && it.local !== c.mercado) meta.push(`<span>em ${esc(it.local)}</span>`);
+  if (!it.comprado && it.sugestao && it.sugestao !== c.mercado) meta.push(`<span class="badge">${esc(it.sugestao)}</span>`);
+  if (al) meta.push(`<span class="badge alerta">${Math.round(al.pct)}% acima da média</span>`);
+  const valor = it.comprado ? `<div class="valor">${fmt(it.qtd * it.preco)}</div>` : (ult ? `<div class="valor est">≈ ${fmt((it.qtd || 1) * ult)}</div>` : '');
+  return `<div class="item${it.comprado ? ' ok' : ''}">
+    <button class="check" data-a="check" data-pid="${esc(it.pid)}" aria-label="${it.comprado ? 'Desmarcar' : 'Marcar como comprado'}: ${esc(nome)}">${svgCheck}</button>
+    ${thumbHTML(p, nome)}
+    <button class="info" data-a="item" data-pid="${esc(it.pid)}"><div class="nome">${esc(nome)}</div><div class="meta">${meta.join('')}</div></button>
+    ${valor}
+  </div>`;
+}
+/** Agrupa itens por categoria, na ordem do cadastro. */
+function agruparPorCategoria(itens, catDe){
+  const grupos = new Map();
+  for (const it of itens) { const k = catDe(it) || ''; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(it); }
+  const ordem = [...Dados.cfg.categorias.map(c => c.id), ''];
+  return ordem.filter(k => grupos.has(k)).map(k => ({cat: k ? categoria(k) : SEM_CAT, itens: grupos.get(k)}));
+}
+/** Desenha grupos de itens por categoria. */
+const gruposHTML = (lista, c) => agruparPorCategoria(lista, catIdItem).map(g => `<section class="grupo"><h3><i class="dot" style="background:${esc(g.cat.cor)}"></i>${esc(g.cat.nome)}</h3><div class="lista">${g.itens.map(it => itemHTML(it, c)).join('')}</div></section>`).join('');
+function telaLista(){
+  const c = compraAberta(); const t = totais(c); const itens = (c && c.itens) || [];
+  let h = heroHTML(c, t);
+  h += `<div class="busca"><input id="buscaLista" class="campo" type="search" placeholder="Buscar produto, marca ou categoria" value="${esc(buscaLista)}" autocomplete="off" enterkeyhint="search" aria-label="Buscar"></div>`;
+  // filtros por categoria presentes na lista
+  if (itens.length) {
+    const cont = new Map(); itens.forEach(it => { if (!it.comprado) { const k = catIdItem(it) || '_sem'; cont.set(k, (cont.get(k) || 0) + 1); } });
+    const cats = [...Dados.cfg.categorias.filter(x => cont.has(x.id) || UI.filtroCat === x.id)];
+    h += `<div class="chips" role="group" aria-label="Filtrar por categoria"><button class="chip" data-a="filtro-cat" data-v="" aria-pressed="${!UI.filtroCat}">Todas</button>`;
+    h += cats.map(x => `<button class="chip" data-a="filtro-cat" data-v="${esc(x.id)}" aria-pressed="${UI.filtroCat === x.id}"><i class="dot" style="background:${esc(x.cor)}"></i>${esc(x.nome)}${cont.get(x.id) ? ` <small>${cont.get(x.id)}</small>` : ''}</button>`).join('');
+    if (cont.has('_sem') || UI.filtroCat === '_sem') h += `<button class="chip" data-a="filtro-cat" data-v="_sem" aria-pressed="${UI.filtroCat === '_sem'}">Sem categoria</button>`;
+    h += `</div>`;
+  }
+  h += `<div class="linha-opcoes"><label class="sw"><input type="checkbox" data-ch="ocultar" ${UI.ocultarComprados ? 'checked' : ''}><span></span>Ocultar comprados</label><label class="sw"><input type="checkbox" data-ch="modo-mercado" ${UI.modoMercado ? 'checked' : ''}><span></span>Modo mercado</label></div>`;
+  // sugestões de reposição
+  if (!buscaLista && !UI.filtroCat) {
+    const sug = sugestoes();
+    if (sug.length) h += `<section class="cartao sug"><h2>Pode estar acabando</h2><div class="sub">Pelo intervalo em que você costuma comprar</div><div class="chips quebra">${sug.map(s => `<button class="chip" data-a="add-sug" data-pid="${esc(s.pid)}">+ ${esc(Dados.produtos.get(s.pid).nome)}</button>`).join('')}</div></section>`;
+  }
+  // filtro de busca e categoria
+  const q = buscaLista.trim();
+  let vis = itens.filter(it => (!UI.filtroCat || (catIdItem(it) || '_sem') === UI.filtroCat) && (!q || casa(textoBusca(Dados.produtos.get(it.pid), it) + ' ' + norm(it.obs), q)));
+  const ocultos = UI.ocultarComprados ? vis.filter(i => i.comprado).length : 0;
+  if (UI.ocultarComprados) vis = vis.filter(i => !i.comprado);
+  if (!itens.length) {
+    const ult = comprasFeitas()[0];
+    h += `<div class="vazio"><strong>Sua lista está vazia</strong>Toque em Adicionar ou cole uma lista recebida por mensagem.<div class="grade-btn" style="margin-top:16px;justify-content:center"><button class="btn sec" data-a="colar">Colar lista</button>${ult ? `<button class="btn sec" data-a="repetir" data-id="${esc(ult.id)}">Repetir a última compra</button>` : ''}</div></div>`;
+  } else {
+    vis.sort((a, b) => (a.comprado - b.comprado) || nomeItem(a).localeCompare(nomeItem(b), 'pt-BR'));
+    // com lugar definido: pendentes sugeridos para outro lugar ficam separados
+    const aqui = c.mercado ? vis.filter(it => it.comprado || !it.sugestao || it.sugestao === c.mercado) : vis;
+    const outros = c.mercado ? vis.filter(it => !it.comprado && it.sugestao && it.sugestao !== c.mercado) : [];
+    h += gruposHTML(aqui, c);
+    if (outros.length) {
+      const porLugar = new Map(); outros.forEach(it => { if (!porLugar.has(it.sugestao)) porLugar.set(it.sugestao, []); porLugar.get(it.sugestao).push(it); });
+      for (const [lugar, lst] of porLugar) h += `<h2 class="secao-titulo">Sugeridos para ${esc(lugar)}</h2><div class="contagem" style="margin-top:-6px">Pendentes. Se encontrar aqui, pode comprar normalmente.</div>${gruposHTML(lst, c)}`;
+    }
+    if (!vis.length && !q) h += `<div class="vazio"><strong>${UI.filtroCat ? 'Nada pendente nesta categoria' : 'Tudo comprado'}</strong>${UI.filtroCat ? '' : 'Finalize a compra para guardar no histórico.'}</div>`;
+    if (!vis.length && q) h += `<div class="contagem">Nenhum item da lista com “${esc(q)}”.</div>`;
+    if (ocultos) h += `<div class="ocultos">${ocultos} ${ocultos === 1 ? 'item comprado oculto' : 'itens comprados ocultos'} <button class="btn texto" data-a="mostrar-comprados">Mostrar</button></div>`;
+  }
+  // busca também no catálogo
+  if (q) {
+    const naLista = new Set(itens.map(i => i.pid));
+    const cat = ordenarProdutos([...Dados.produtos.values()].filter(p => !naLista.has(p.id) && casa(textoBusca(p), q))).slice(0, 8);
+    h += `<section class="cartao"><h2>Do seu catálogo</h2>${cat.length ? cat.map(p => `<div class="res-linha">${thumbHTML(p, p.nome)}<div class="info"><div class="nome">${esc(p.nome)}</div><div class="meta"><span>${esc([p.marca, p.tamanho].filter(Boolean).join(' '))}</span><span>${esc(categoria(catDoProduto(p)).nome)}</span></div></div><button class="mini-add" data-a="add-lista" data-pid="${esc(p.id)}">Adicionar</button></div>`).join('') : '<div class="contagem">Nenhum produto cadastrado com esse nome.</div>'}
+    <div style="margin-top:10px"><button class="btn sec bloco" data-a="novo-produto-busca">Cadastrar “${esc(q)}”</button></div></section>`;
+  }
+  if (itens.length) {
+    const ult = comprasFeitas()[0];
+    h += `<div class="acoes-fim">${ult ? `<button class="btn sec" data-a="repetir" data-id="${esc(ult.id)}">Repetir última compra</button>` : `<button class="btn sec" data-a="colar">Colar lista</button>`}<button class="btn pri" data-a="finalizar">Finalizar compra</button></div>`;
+  }
+  h += `<button class="fab" data-a="adicionar"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Adicionar</button>`;
+  return h;
+}
+/** Garante o lugar atual antes de colocar algo no carrinho. */
+function exigirLugar(fn){
+  const c = compraAberta();
+  if (c && c.mercado) return fn();
+  toast('Onde você está comprando agora?');
+  abrirMercado(fn);
+}
+
+/* =========================================================
+   FOLHA: ITEM DA LISTA (quantidade, preço, observação, total ao vivo)
+   ========================================================= */
+function abrirItem(pid, focarPreco){
+  const c0 = compraAberta(); const it0 = c0 && c0.itens.find(i => i.pid === pid); if (!it0) return;
+  const p = Dados.produtos.get(pid); const nome = nomeItem(it0); const un = unidadeItem(it0); const passo = un === 'kg' ? 0.1 : 1;
+  const ult = ultimoPreco(pid, c0.id);
+  let qtd = it0.qtd > 0 ? it0.qtd : NaN;
+  let precoTxt = it0.preco > 0 ? fmtNum2(it0.preco) : (ult ? fmtNum2(ult) : '');
+  let obs = it0.obs || '';
+  let sugestao = it0.sugestao || '';
+  const hist = (indice().hist.get(pid) || []).filter(x => x.compraId !== c0.id).slice(-3).reverse();
+  /** Subtotal, total do carrinho e alertas, atualizados enquanto digita. */
+  const resumo = () => {
+    const pr = parseNum(precoTxt); const c = compraAberta(); if (!c) return '';
+    const t = totais(c); const at = c.itens.find(i => i.pid === pid);
+    const contrib = at && at.comprado ? at.qtd * at.preco : 0;
+    const sub = qtd > 0 && pr > 0 ? r2(qtd * pr) : 0; const novo = t.gasto - contrib + sub;
+    const al = alertaPreco(pid, pr, c.id);
+    let h = `<div class="resumo-item"><span>Subtotal</span><strong>${fmt(sub)}</strong><span>Carrinho com este item</span><strong>${fmt(novo)}</strong></div>`;
+    if (al) h += `<div class="aviso perigo">Preço ${Math.round(al.pct)}% acima da sua média de ${fmt(al.media)}.</div>`;
+    if (c.orcamento > 0 && novo > c.orcamento) h += `<div class="aviso">Com este item o carrinho passa ${fmt(novo - c.orcamento)} do orçamento.</div>`;
+    return h;
+  };
+  const s = {
+    titulo: nome,
+    html(){
+      const c = compraAberta(); const at = c?.itens.find(i => i.pid === pid) || it0;
+      const lugares = [...new Set([...Dados.cfg.mercados, sugestao].filter(Boolean))];
+      return `<div class="cab-prod">${thumbHTML(p, nome)}<div><div class="meta">${esc([p?.marca, p?.tamanho].filter(Boolean).join(' ') || 'Sem marca no cadastro')}</div><div class="meta">${esc(categoria(catIdItem(at)).nome)}${c && c.mercado ? ' em ' + esc(c.mercado) : ''}</div></div></div>
+      ${obs ? `<div class="aviso" style="margin-top:8px">${esc(obs)}</div>` : ''}
+      <button class="btn sec bloco" style="margin-top:12px" data-a="comparar">Comparar opções de embalagem</button>
+      <label class="rot" for="iQtd">Quantidade (${un === 'kg' ? 'kg' : 'unidades'})</label>
+      <div class="stepper"><button type="button" data-a="menos" aria-label="Diminuir">−</button><input id="iQtd" class="campo" inputmode="decimal" placeholder="definir" value="${qtd > 0 ? esc(String(qtd).replace('.', ',')) : ''}" autocomplete="off"><button type="button" data-a="mais" aria-label="Aumentar">+</button></div>
+      <label class="rot" for="iPreco">Preço ${un === 'kg' ? 'por kg' : 'unitário'}${ult ? ` <span>(último: ${fmt(ult)})</span>` : ''}</label>
+      <div class="preco-campo"><span>R$</span><input id="iPreco" class="campo" inputmode="decimal" placeholder="0,00" value="${esc(precoTxt)}" autocomplete="off"></div>
+      <div id="iResumo">${resumo()}</div>
+      <label class="rot" for="iObs">Observação</label><input id="iObs" class="campo" maxlength="80" placeholder="Ex.: Camil ou Namorado" value="${esc(obs)}" autocomplete="off">
+      <span class="rot">Onde comprar (sugestão)</span>
+      <div class="chips quebra"><button type="button" class="chip" data-a="sug" data-v="" aria-pressed="${!sugestao}">Qualquer lugar</button>${lugares.map(m => `<button type="button" class="chip" data-a="sug" data-v="${esc(m)}" aria-pressed="${sugestao === m}">${esc(m)}</button>`).join('')}</div>
+      ${hist.length ? `<div class="hist"><div style="border:0;padding-top:0"><b>Últimos preços pagos</b></div>${hist.map(x => `<div><span>${fmtData(x.data)}${x.mercado ? ' em ' + esc(x.mercado) : ''}</span><b>${fmt(x.preco)}</b></div>`).join('')}</div>` : ''}
+      <div class="sheet-acoes">
+        ${at.comprado ? `<button class="btn pri" data-a="comprado">Atualizar no carrinho</button><button class="btn sec" data-a="desmarcar">Tirar do carrinho</button>` : `<button class="btn pri" data-a="comprado">Colocar no carrinho</button><button class="btn sec" data-a="salvar">Salvar sem marcar</button>`}
+      </div>
+      <div class="sheet-acoes duas"><button class="btn texto" data-a="editar">Editar produto</button><button class="btn texto perigo-txt" data-a="remover">Remover da lista</button></div>`;
+    },
+    montar(el){
+      const iq = el.querySelector('#iQtd'), ip = el.querySelector('#iPreco'), io = el.querySelector('#iObs');
+      const at = () => { qtd = parseNum(iq.value); precoTxt = ip.value; el.querySelector('#iResumo').innerHTML = resumo(); };
+      iq.addEventListener('input', at); ip.addEventListener('input', at); io.addEventListener('input', () => { obs = io.value; });
+      ip.addEventListener('keydown', e => { if (e.key === 'Enter') s.acoes.comprado(); });
+      if (focarPreco) { focarPreco = false; setTimeout(() => { const alvo = qtd > 0 ? ip : iq; alvo.focus(); alvo.select(); }, 80); }
+    },
+    acoes: {
+      mais(b){ const iq = b.closest('.sheet').querySelector('#iQtd'); const v = parseNum(iq.value); qtd = r3((Number.isFinite(v) ? v : 0) + passo); iq.value = String(qtd).replace('.', ','); iq.dispatchEvent(new Event('input')); },
+      menos(b){ const iq = b.closest('.sheet').querySelector('#iQtd'); const v = parseNum(iq.value); qtd = r3(Math.max(passo, (Number.isFinite(v) ? v : passo) - passo)); iq.value = String(qtd).replace('.', ','); iq.dispatchEvent(new Event('input')); },
+      sug(b){ sugestao = b.dataset.v; mostrarSheet(); },
+      comparar(){ gravarItem(false, true); abrirComparador(pid); },
+      comprado(){ gravarItem(true); },
+      salvar(){ gravarItem(false); },
+      desmarcar(){ const c = editarCompraAberta(); const it = c.itens.find(i => i.pid === pid); if (it) { it.comprado = false; delete it.compradoEm; delete it.local; Dados.salvarCompra(c); } fecharSheet(); },
+      remover(){
+        const c = editarCompraAberta(); const ant = clone(c); c.itens = c.itens.filter(i => i.pid !== pid); Dados.salvarCompra(c); fecharSheet();
+        toast(nome + ' removido da lista', {rotulo:'Desfazer', fn: () => Dados.salvarCompra(ant)});
+      },
+      editar(){ abrirProduto(pid); },
+    },
+  };
+  /** Grava quantidade, preço, observação e sugestão; marca como comprado quando pedido. */
+  function gravarItem(marcar, manterAberta){
+    const pr = parseNum(precoTxt);
+    if (marcar && !(qtd > 0)) return toast('Informe a quantidade.');
+    if (marcar && !(pr > 0)) return toast('Informe o preço para colocar no carrinho.');
+    const aplicar = () => {
+      const c = editarCompraAberta(); const it = c.itens.find(i => i.pid === pid); if (!it) return fecharSheet();
+      it.qtd = qtd > 0 ? r3(qtd) : null; it.preco = pr > 0 ? r2(pr) : null; it.obs = obs.trim().slice(0, 80) || null; it.sugestao = sugestao || null;
+      if (marcar) { it.comprado = true; it.compradoEm = it.compradoEm || Date.now(); it.local = c.mercado; }
+      Dados.salvarCompra(c);
+      if (!manterAberta) fecharSheet();
+      if (marcar) toast(nome + ' no carrinho');
+    };
+    if (marcar) exigirLugar(aplicar); else aplicar();
+  }
+  abrirSheet(s);
+}
+
+/* =========================================================
+   FOLHA: ADICIONAR À LISTA (busca no catálogo, código, novo)
+   ========================================================= */
+function abrirAdicionar(){
+  let q = '';
+  const res = () => {
+    const ab = compraAberta(); const naLista = new Set(((ab && ab.itens) || []).map(i => i.pid));
+    let lista = [...Dados.produtos.values()];
+    if (q.trim()) lista = lista.filter(p => casa(textoBusca(p), q));
+    lista = ordenarProdutos(lista).slice(0, 80);
+    let h = '';
+    if (!Dados.produtos.size) h += `<div class="contagem">Nenhum produto cadastrado ainda. Leia o código de barras ou toque em Novo produto.</div>`;
+    h += lista.map(p => `<div class="res-linha">${thumbHTML(p, p.nome)}<div class="info"><div class="nome">${esc(p.nome)}</div><div class="meta"><span>${esc([p.marca, p.tamanho].filter(Boolean).join(' '))}</span><span>${esc(categoria(catDoProduto(p)).nome)}</span></div></div>${naLista.has(p.id) ? '<span class="badge ok">Na lista</span>' : `<button class="mini-add" data-a="add" data-pid="${esc(p.id)}">Adicionar</button>`}</div>`).join('');
+    if (q.trim()) h += `<div style="margin-top:10px"><button class="btn sec bloco" data-a="novo">Cadastrar “${esc(q.trim())}”</button></div>`;
+    return h;
+  };
+  abrirSheet({
+    titulo: 'Adicionar à lista',
+    html: () => `<div class="grade-btn"><button class="btn sec" data-a="scan">${ICONES.codigo}Ler código de barras</button><button class="btn sec" data-a="digitar">${ICONES.teclado}Digitar código</button><button class="btn sec" data-a="novo">${ICONES.mais}Novo produto</button><button class="btn sec" data-a="colar">${ICONES.colar}Colar lista</button></div>
+      <label class="rot" for="buscaAdd">Buscar no catálogo</label><input id="buscaAdd" class="campo" type="search" value="${esc(q)}" placeholder="Comece a digitar" autocomplete="off">
+      <div id="addRes" style="margin-top:6px">${res()}</div>`,
+    montar(el){ const i = el.querySelector('#buscaAdd'); i.addEventListener('input', () => { q = i.value; el.querySelector('#addRes').innerHTML = res(); }); },
+    acoes: {
+      add(b){ const p = Dados.produtos.get(b.dataset.pid); if (addNaLista(b.dataset.pid)) toast((p ? p.nome : 'Produto') + ' adicionado'); const r = b.closest('.sheet').querySelector('#addRes'); setTimeout(() => { r.innerHTML = res(); }, 0); },
+      novo(){ abrirProduto(null, {nome: q.trim(), adicionarNaLista: true}); },
+      colar(){ abrirColar(); },
+      async scan(){ const cod = await lerCodigoAoVivo(); if (cod) tratarCodigoLido(cod, true); },
+      async digitar(){ const cod = await digitarCodigo(); if (cod) tratarCodigoLido(cod, true); },
+    },
+    aoFechar(){},
+  });
+}
+/** Após ler um código: abre o produto existente ou inicia o cadastro. */
+function tratarCodigoLido(cod, paraLista){
+  const p = [...Dados.produtos.values()].find(x => x.codigo === cod);
+  if (p) {
+    if (!paraLista) return abrirProduto(p.id);
+    const ab = compraAberta();
+    if (ab && ab.itens.some(i => i.pid === p.id)) { fecharTodasSheets(); return abrirItem(p.id, true); }
+    addNaLista(p.id); toast(p.nome + ' adicionado à lista');
+    const s = topoSheet(); if (s) mostrarSheet();
+    return;
+  }
+  toast('Produto novo. Tire uma foto da frente para a IA preencher.', null, 4500);
+  abrirProduto(null, {codigo: cod, adicionarNaLista: paraLista});
+}
+function fecharTodasSheets(){ while (pilha.length) fecharSheet(); }
+
+/* =========================================================
+   FOLHA: CADASTRO DE PRODUTO (foto, IA, código, categoria)
+   ========================================================= */
+function abrirProduto(pid, opts = {}){
+  const orig = pid ? Dados.produtos.get(pid) : null;
+  const f = orig ? clone(orig) : {id: novoId(), nome: opts.nome || '', marca: '', tamanho: '', unidade: 'un', categoriaId: (UI.tab === 'produtos' ? UI.catProdutos : UI.filtroCat) || null, codigo: opts.codigo || '', fotoId: null, fotoData: null, criadoEm: Date.now()};
+  if (f.categoriaId === '_sem') f.categoriaId = null;
+  const st = {arquivo: null, previa: null, removerFoto: false, salvando: false};
+  const fotoAtual = () => st.previa || (st.removerFoto ? null : fotoUrl(f));
+  const s = {
+    titulo: orig ? 'Editar produto' : 'Novo produto',
+    html(){
+      const u = fotoAtual();
+      return `<div class="foto-area">
+          ${u ? `<img class="foto-prev" src="${esc(u)}" alt="Foto do produto">` : `<div class="foto-prev">Sem foto (opcional)</div>`}
+          <div class="foto-btns">
+            ${botaoArquivo('foto-camera', 'Tirar foto', {camera: true, icone: 'camera'})}
+            ${botaoArquivo('foto-galeria', 'Escolher da galeria', {icone: 'galeria'})}
+            ${u ? `<button class="btn texto perigo-txt" data-a="foto-remover">Remover foto</button>` : ''}
+          </div>
+        </div>
+        <label class="rot" for="pNome">Nome</label><input id="pNome" class="campo" data-f="nome" value="${esc(f.nome)}" maxlength="60" placeholder="Ex.: Papel higiênico folha dupla" autocomplete="off">
+        <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:10px">
+          <div><label class="rot" for="pMarca">Marca</label><input id="pMarca" class="campo" data-f="marca" value="${esc(f.marca)}" maxlength="40" autocomplete="off"></div>
+          <div><label class="rot" for="pTam">Tamanho</label><input id="pTam" class="campo" data-f="tamanho" value="${esc(f.tamanho)}" maxlength="20" placeholder="1 L, 500 g" autocomplete="off"></div>
+        </div>
+        <span class="rot">Vendido por</span>
+        <div class="seg" role="group"><button type="button" data-a="un" data-v="un" aria-pressed="${f.unidade !== 'kg'}">Unidade</button><button type="button" data-a="un" data-v="kg" aria-pressed="${f.unidade === 'kg'}">Peso (kg)</button></div>
+        <span class="rot">Comparar preço por</span>
+        <div class="chips quebra">${Object.entries(MEDIDAS).map(([k, m]) => `<button type="button" class="chip" data-a="medida" data-v="${k}" aria-pressed="${medidaPadrao(f) === k}">${esc(m.rotulo)}</button>`).join('')}</div>
+        <span class="rot">Categoria</span>
+        <div class="chips quebra">${Dados.cfg.categorias.map(c => `<button type="button" class="chip" data-a="cat" data-v="${esc(c.id)}" aria-pressed="${f.categoriaId === c.id}"><i class="dot" style="background:${esc(c.cor)}"></i>${esc(c.nome)}</button>`).join('')}</div>
+        <label class="rot" for="pCod">Código de barras</label>
+        <div class="campo-linha"><input id="pCod" class="campo" data-f="codigo" value="${esc(f.codigo)}" inputmode="numeric" maxlength="14" placeholder="Opcional" autocomplete="off"><button class="btn sec" data-a="cod-ler">${ICONES.codigo}Ler</button></div>
+        <div class="sheet-acoes"><button class="btn pri" data-a="salvar" ${st.salvando ? 'disabled' : ''}>${st.salvando ? 'Salvando…' : (opts.adicionarNaLista && !orig ? 'Salvar e adicionar à lista' : 'Salvar produto')}</button></div>
+        ${orig ? `<div class="sheet-acoes"><button class="btn texto perigo-txt" data-a="excluir">Excluir produto</button></div>` : ''}`;
+    },
+    montar(el){ el.querySelectorAll('[data-f]').forEach(i => i.addEventListener('input', () => { f[i.dataset.f] = i.value; })); },
+    acoes: {
+      'foto-camera'(el, a){ if (a) definirFoto(a); },
+      'foto-galeria'(el, a){ if (a) definirFoto(a); },
+      'foto-remover'(){ if (st.previa) URL.revokeObjectURL(st.previa); st.previa = null; st.arquivo = null; st.removerFoto = true; mostrarSheet(); },
+      un(b){ f.unidade = b.dataset.v === 'kg' ? 'kg' : 'un'; mostrarSheet(); },
+      medida(b){ if (MEDIDAS[b.dataset.v]) f.medida = b.dataset.v; mostrarSheet(); },
+      cat(b){ f.categoriaId = f.categoriaId === b.dataset.v ? null : b.dataset.v; mostrarSheet(); },
+      async 'cod-ler'(){ const c = await lerCodigoAoVivo(); if (c) { f.codigo = c; mostrarSheet(); } },
+      async salvar(){
+        if (st.salvando) return;
+        f.nome = (f.nome || '').trim(); f.marca = (f.marca || '').trim(); f.tamanho = (f.tamanho || '').trim();
+        if (!f.nome) return toast('Informe o nome do produto.');
+        f.codigo = (f.codigo || '').replace(/\D/g, '');
+        if (f.codigo && !/^\d{8,14}$/.test(f.codigo)) return toast('O código de barras deve ter de 8 a 14 dígitos.');
+        const dupCod = f.codigo && [...Dados.produtos.values()].find(x => x.id !== f.id && x.codigo === f.codigo);
+        if (dupCod) return toast('Este código já está no produto ' + dupCod.nome + '.');
+        const dupNome = [...Dados.produtos.values()].find(x => x.id !== f.id && norm(x.nome) === norm(f.nome) && norm(x.marca) === norm(f.marca));
+        if (dupNome && !(await confirmar(`Já existe "${dupNome.nome}"${dupNome.marca ? ' da marca ' + dupNome.marca : ''}. Salvar outro mesmo assim?`, 'Salvar'))) return;
+        st.salvando = true; mostrarSheet();
+        try {
+          const antigo = orig && orig.fotoId;
+          if (st.arquivo) { const r = await salvarFoto(st.arquivo); f.fotoId = r.fotoId; f.fotoData = r.fotoData; }
+          else if (st.removerFoto) { f.fotoId = null; f.fotoData = null; }
+          Dados.salvarProduto(f);
+          if (opts.adicionarNaLista && !orig) addNaLista(f.id);
+          st.salvando = false; fecharSheet();
+          toast(orig ? 'Produto atualizado' : (opts.adicionarNaLista ? f.nome + ' cadastrado e adicionado à lista' : 'Produto cadastrado'));
+        } catch { st.salvando = false; mostrarSheet(); toast('Não foi possível salvar a foto. Tente de novo.'); }
+      },
+      async excluir(){
+        if (!(await confirmar(`Excluir "${f.nome}" do catálogo? O histórico de compras continua guardado.`, 'Excluir', true))) return;
+        const ab = compraAberta();
+        if (ab && ab.itens.some(i => i.pid === f.id)) { const c = clone(ab); c.itens = c.itens.filter(i => i.pid !== f.id); Dados.salvarCompra(c); }
+        Dados.excluirProduto(f.id); fecharTodasSheets(); toast('Produto excluído');
+      },
+    },
+    aoFechar(){ if (st.previa) URL.revokeObjectURL(st.previa); },
+  };
+  /** Guarda a foto escolhida para pré-visualização, IA e gravação. */
+  function definirFoto(a){
+    if (!/^image\//.test(a.type || '')) return toast('Escolha um arquivo de imagem.');
+    if (st.previa) URL.revokeObjectURL(st.previa);
+    st.arquivo = a; st.previa = URL.createObjectURL(a); st.removerFoto = false;
+    mostrarSheet();
+  }
+  abrirSheet(s);
+}
+
+/* =========================================================
+   FOLHA: LUGAR ATUAL E ORÇAMENTO
+   ========================================================= */
+function abrirMercado(depois){
+  const ab = compraAberta();
+  abrirSheet({
+    titulo: 'Onde você está comprando?',
+    html: () => `${Dados.cfg.mercados.length ? `<span class="rot">Seus lugares de compra</span><div class="chips quebra">${Dados.cfg.mercados.map(m => `<button class="chip" data-a="mer" data-v="${esc(m)}" aria-pressed="${ab && ab.mercado === m}">${esc(m)}</button>`).join('')}</div>` : ''}
+      <label class="rot" for="novoMer">Outro lugar</label><div class="campo-linha"><input id="novoMer" class="campo" maxlength="40" placeholder="Nome do mercado ou quitanda" autocomplete="off"><button class="btn pri" data-a="usar">Usar</button></div>
+      <div class="contagem" style="margin-top:12px">Os itens colocados no carrinho ficam registrados no lugar em que você está.</div>`,
+    acoes: {
+      mer(b){ aplicar(b.dataset.v); },
+      usar(b){ aplicar(b.closest('.sheet').querySelector('#novoMer').value); },
+    },
+  });
+  /** Define o lugar atual e o guarda na lista de lugares. */
+  function aplicar(v){
+    v = String(v || '').trim().slice(0, 40); if (!v) return toast('Informe o nome do lugar.');
+    const c = editarCompraAberta(); c.mercado = v; Dados.salvarCompra(c);
+    if (!Dados.cfg.mercados.includes(v)) Dados.salvarCfg(x => { x.mercados.push(v); x.mercados.sort((a, b) => a.localeCompare(b, 'pt-BR')); });
+    fecharSheet(); if (depois) depois();
+  }
+}
+async function definirOrcamento(){
+  const c0 = compraAberta();
+  const t = await perguntar('Orçamento desta compra', c0 && c0.orcamento ? fmtNum2(c0.orcamento) : '', {placeholder: 'Deixe vazio para remover', modo: 'decimal'});
+  if (t === null) return;
+  const v = parseNum(t);
+  const c = editarCompraAberta(); c.orcamento = v > 0 ? r2(v) : null; Dados.salvarCompra(c);
+}
+/** Finaliza a compra separando por lugar real; itens não comprados seguem para a próxima lista. */
+async function finalizarCompra(){
+  const c = compraAberta(); if (!c || !c.itens.length) return toast('A lista está vazia.');
+  const comprados = c.itens.filter(i => i.comprado), pend = c.itens.filter(i => !i.comprado);
+  if (!comprados.length) return toast('Coloque ao menos um item no carrinho.');
+  if (comprados.some(i => !i.local) && !c.mercado) return abrirMercado(finalizarCompra);
+  const porLugar = new Map();
+  for (const it of comprados) { const k = it.local || c.mercado; if (!porLugar.has(k)) porLugar.set(k, []); porLugar.get(k).push(it); }
+  const resumo = [...porLugar].map(([k, l]) => `${k} ${fmt(r2(l.reduce((s, i) => s + i.qtd * i.preco, 0)))}`).join('; ');
+  const ok = await confirmar(`Finalizar a compra? ${resumo}.` + (porLugar.size > 1 ? ' Fica registrada uma compra por lugar.' : '') + (pend.length ? ` ${pend.length} ${pend.length === 1 ? 'item não comprado vai' : 'itens não comprados vão'} para a próxima lista.` : ''), 'Finalizar');
+  if (!ok) return;
+  const agora = Date.now(); let primeira = true;
+  for (const [lugar, lst] of porLugar) {
+    const itens = lst.map(i => Object.assign(clone(i), {local: lugar}));
+    Dados.salvarCompra({id: primeira ? c.id : novoId(), status: 'finalizada', mercado: lugar, orcamento: porLugar.size === 1 ? (c.orcamento || null) : null, criadaEm: c.criadaEm, finalizadaEm: agora, total: r2(itens.reduce((s, i) => s + i.qtd * i.preco, 0)), itens});
+    primeira = false;
+  }
+  if (pend.length) Dados.salvarCompra({id: novoId(), status: 'aberta', mercado: '', orcamento: c.orcamento || null, criadaEm: agora, itens: pend.map(i => Object.assign(clone(i), {preco: null}))});
+  buscaLista = ''; UI.filtroCat = ''; salvarUI();
+  toast(porLugar.size > 1 ? `${porLugar.size} compras guardadas no histórico` : 'Compra finalizada e guardada no histórico');
+}
+/** Copia os itens de uma compra anterior para a lista atual. */
+function repetirCompra(id){
+  const ant = Dados.compras.get(id); if (!ant) return;
+  const c = editarCompraAberta(); const ja = new Set(c.itens.map(i => i.pid)); let n = 0;
+  for (const it of ant.itens) {
+    const p = Dados.produtos.get(it.pid); if (!p || ja.has(it.pid)) continue;
+    c.itens.push({pid: p.id, nome: p.nome, marca: p.marca || '', categoriaId: catDoProduto(p), unidade: p.unidade || 'un', qtd: it.qtd || 1, preco: null, comprado: false, obs: it.obs || null, sugestao: it.sugestao || null}); n++;
+  }
+  if (!n) return toast('Esses itens já estão na lista.');
+  Dados.salvarCompra(c); toast(n + (n === 1 ? ' item adicionado' : ' itens adicionados'));
+}
+
+/* =========================================================
+   FOLHA: COMPARADOR DE EMBALAGENS
+   ========================================================= */
+function abrirComparador(pid){
+  const p0 = Dados.produtos.get(pid); if (!p0) return;
+  const it0 = compraAberta()?.itens.find(i => i.pid === pid);
+  let medida = medidaPadrao(p0);
+  const nova = () => ({marca: '', preco: '', qtdEmb: '1', tam: '', sub: MEDIDAS[medida].padrao, promo: 'nenhuma', leveL: '3', leveP: '2', segPct: '50'});
+  // pré-preenche com as marcas e tamanhos das últimas comparações (preço em branco)
+  const anteriores = []; const vistos = new Set();
+  for (const r of [...(p0.comparacoes || [])].reverse()) { const k = norm(r.marca) + '|' + r.tam + r.sub; if (r.medida === medida && r.marca && !vistos.has(k)) { vistos.add(k); anteriores.push({...nova(), marca: r.marca, qtdEmb: String(r.qtdEmb || 1), tam: String(r.tam || '').replace('.', ','), sub: r.sub}); } if (anteriores.length >= 3) break; }
+  let opcoes = anteriores.length >= 2 ? anteriores : [...anteriores, nova(), nova()].slice(0, 2);
+  let qtdLevar = it0 && it0.qtd > 0 ? String(it0.qtd).replace('.', ',') : '';
+  /** Melhores marcas do histórico (menor preço por unidade). */
+  const historico = () => {
+    const regs = (Dados.produtos.get(pid)?.comparacoes || []).filter(r => r.medida === medida && r.unit > 0);
+    if (!regs.length) return '';
+    const melhor = new Map(); for (const r of regs) { const k = norm(r.marca) || '-'; if (!melhor.has(k) || r.unit < melhor.get(k).unit) melhor.set(k, r); }
+    const top = [...melhor.values()].sort((a, b) => a.unit - b.unit).slice(0, 3);
+    return `<div class="hist"><div style="border:0;padding-top:0"><b>Melhores preços já comparados</b></div>${top.map(r => `<div><span>${esc(r.marca || 'Sem marca')}${r.lugar ? ' em ' + esc(r.lugar) : ''} (${fmtDataCurta(r.em)})</span><b>${fmtUnit(r.unit)}/${MEDIDAS[medida].base}</b></div>`).join('')}</div>`;
+  };
+  /** Ranking das opções preenchidas. */
+  const ranking = () => {
+    const calc = opcoes.map((o, i) => ({i, o, r: calcularOpcao(o, medida)})).filter(x => x.r).sort((a, b) => a.r.unit - b.r.unit);
+    if (!calc.length) return `<div class="contagem">Preencha preço e tamanho de pelo menos uma opção.</div>`;
+    const base = MEDIDAS[medida].base; const v = calc[0];
+    let h = `<div class="resumo-item" style="grid-template-columns:auto 1fr auto">${calc.map((x, k) => `<span>${k + 1}º</span><span class="${k === 0 ? 'melhor' : ''}">${esc(x.o.marca || 'Opção ' + (x.i + 1))}${x.r.levar > 1 ? ` <small>(levando ${x.r.levar})</small>` : ''}</span><strong class="${k === 0 ? 'melhor' : ''}">${fmtUnit(x.r.unit)}/${base}${k > 0 ? ` <small style="font-weight:500">+${Math.round((x.r.unit / v.r.unit - 1) * 100)}%</small>` : ''}</strong>`).join('')}</div>`;
+    if (calc.length > 1) h += `<div class="aviso bom">${esc(v.o.marca || 'Opção ' + (v.i + 1))} é a mais vantajosa: ${Math.round((1 - v.r.unit / calc[1].r.unit) * 100)}% mais barata que a segunda.</div>`;
+    return h;
+  };
+  /** Bloco de entrada de uma opção. */
+  const opcaoHTML = (o, i) => {
+    const M = MEDIDAS[medida];
+    const tamanho = medida === 'un' ? `<label class="rot">Unidades na embalagem</label><input class="campo" data-o="${i}" data-k="qtdEmb" inputmode="decimal" value="${esc(o.qtdEmb)}">`
+      : medida === 'lav' ? `<label class="rot">Rende quantas lavagens/doses</label><input class="campo" data-o="${i}" data-k="tam" inputmode="decimal" value="${esc(o.tam)}">`
+      : `<div style="display:grid;grid-template-columns:1fr 1.3fr;gap:8px"><div><label class="rot">Itens na embalagem</label><input class="campo" data-o="${i}" data-k="qtdEmb" inputmode="decimal" value="${esc(o.qtdEmb)}"></div><div><label class="rot">Tamanho de cada</label><div class="campo-linha"><input class="campo" data-o="${i}" data-k="tam" inputmode="decimal" placeholder="0" value="${esc(o.tam)}">${M.subs.length > 1 ? `<select class="campo" style="width:auto" data-o="${i}" data-k="sub">${M.subs.map(s => `<option value="${s[0]}" ${o.sub === s[0] ? 'selected' : ''}>${s[0]}</option>`).join('')}</select>` : `<span style="align-self:center">${M.subs[0][0]}</span>`}</div></div></div>`;
+    const promo = `<label class="rot">Promoção</label><select class="campo" data-o="${i}" data-k="promo" data-re="1"><option value="nenhuma" ${o.promo === 'nenhuma' ? 'selected' : ''}>Nenhuma</option><option value="leve" ${o.promo === 'leve' ? 'selected' : ''}>Leve X, pague Y</option><option value="segunda" ${o.promo === 'segunda' ? 'selected' : ''}>Desconto na 2ª unidade</option></select>`
+      + (o.promo === 'leve' ? `<div class="campo-linha" style="margin-top:8px;align-items:center"><span>Leve</span><input class="campo" data-o="${i}" data-k="leveL" inputmode="numeric" value="${esc(o.leveL)}"><span>pague</span><input class="campo" data-o="${i}" data-k="leveP" inputmode="numeric" value="${esc(o.leveP)}"></div>` : '')
+      + (o.promo === 'segunda' ? `<div class="campo-linha" style="margin-top:8px;align-items:center"><span>2ª unidade com</span><input class="campo" data-o="${i}" data-k="segPct" inputmode="numeric" value="${esc(o.segPct)}"><span>% off</span></div>` : '');
+    return `<section class="cartao" style="margin:10px 0"><div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">Opção ${i + 1}</h2>${opcoes.length > 2 ? `<button class="btn texto perigo-txt" data-a="rem-op" data-i="${i}">Remover</button>` : ''}</div>
+      <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:8px"><div><label class="rot">Marca</label><input class="campo" data-o="${i}" data-k="marca" maxlength="40" value="${esc(o.marca)}" autocomplete="off"></div><div><label class="rot">Preço</label><div class="preco-campo"><span>R$</span><input class="campo" style="font-size:16px" data-o="${i}" data-k="preco" inputmode="decimal" placeholder="0,00" value="${esc(o.preco)}"></div></div></div>
+      ${tamanho}${promo}</section>`;
+  };
+  const s = {
+    titulo: 'Comparar: ' + p0.nome,
+    html(){
+      const un = p0.unidade === 'kg';
+      return `<span class="rot">Comparar preço por</span><div class="chips quebra">${Object.entries(MEDIDAS).map(([k, m]) => `<button class="chip" data-a="medida" data-v="${k}" aria-pressed="${medida === k}">${esc(m.rotulo)}</button>`).join('')}</div>
+        ${historico()}
+        ${opcoes.map(opcaoHTML).join('')}
+        ${opcoes.length < 6 ? `<button class="btn sec bloco" data-a="add-op">Adicionar opção</button>` : ''}
+        <h2 class="secao-titulo">Resultado</h2><div id="cmpRes">${ranking()}</div>
+        <label class="rot" for="cmpQtd">${un ? 'Quantos kg vai levar' : 'Quantas embalagens vai levar'}</label><input id="cmpQtd" class="campo" inputmode="decimal" placeholder="${un ? 'kg' : 'embalagens'}" value="${esc(qtdLevar)}">
+        <div class="sheet-acoes"><button class="btn pri" data-a="levar">Colocar a mais vantajosa no carrinho</button><button class="btn sec" data-a="so-salvar">Salvar comparação sem comprar</button></div>`;
+    },
+    montar(el){
+      el.querySelectorAll('[data-o]').forEach(inp => {
+        const ev = inp.tagName === 'SELECT' ? 'change' : 'input';
+        inp.addEventListener(ev, () => { opcoes[Number(inp.dataset.o)][inp.dataset.k] = inp.value; if (inp.dataset.re) mostrarSheet(); else el.querySelector('#cmpRes').innerHTML = ranking(); });
+      });
+      el.querySelector('#cmpQtd').addEventListener('input', e => { qtdLevar = e.target.value; });
+    },
+    acoes: {
+      medida(b){ if (!MEDIDAS[b.dataset.v]) return; medida = b.dataset.v; opcoes.forEach(o => { o.sub = MEDIDAS[medida].padrao; }); mostrarSheet(); },
+      'add-op'(){ opcoes.push(nova()); mostrarSheet(); },
+      'rem-op'(b){ opcoes.splice(Number(b.dataset.i), 1); mostrarSheet(); },
+      'so-salvar'(){ if (salvarHistorico()) { fecharSheet(); toast('Comparação salva'); } },
+      levar(){
+        const calc = opcoes.map(o => ({o, r: calcularOpcao(o, medida)})).filter(x => x.r).sort((a, b) => a.r.unit - b.r.unit);
+        if (!calc.length) return toast('Preencha preço e tamanho de pelo menos uma opção.');
+        const v = calc[0]; const kg = p0.unidade === 'kg';
+        let q = parseNum(qtdLevar); if (!(q > 0)) q = kg ? NaN : v.r.levar;
+        if (!(q > 0)) return toast('Informe quantos kg vai levar.');
+        const preco = kg && medida === 'kg' ? r2(v.r.unit) : r2(v.r.precoEf);
+        exigirLugar(() => {
+          salvarHistorico();
+          const c = editarCompraAberta(); const it = c.itens.find(i => i.pid === pid); if (!it) return;
+          Object.assign(it, {qtd: r3(q), preco, comprado: true, compradoEm: Date.now(), local: c.mercado, marcaCompra: (v.o.marca || '').trim().slice(0, 40) || null});
+          Dados.salvarCompra(c);
+          while (pilha.length) fecharSheet();
+          toast(`${p0.nome}${v.o.marca ? ' ' + v.o.marca : ''} no carrinho`);
+        });
+      },
+    },
+  };
+  /** Guarda as opções válidas no histórico do produto e a medida escolhida. */
+  function salvarHistorico(){
+    const validas = opcoes.map(o => ({o, r: calcularOpcao(o, medida)})).filter(x => x.r);
+    if (!validas.length) { toast('Preencha preço e tamanho de pelo menos uma opção.'); return false; }
+    const p = clone(Dados.produtos.get(pid)); const lugar = compraAberta()?.mercado || '';
+    const regs = validas.map(({o, r}) => ({em: Date.now(), lugar, medida, marca: (o.marca || '').trim().slice(0, 40), preco: r2(parseNum(o.preco)), qtdEmb: medida === 'lav' ? 1 : (parseNum(o.qtdEmb) || 1), tam: medida === 'un' ? 1 : parseNum(o.tam), sub: o.sub, promo: o.promo, unit: r.unit}));
+    p.comparacoes = [...(p.comparacoes || []), ...regs].slice(-40); p.medida = medida;
+    Dados.salvarProduto(p); return true;
+  }
+  abrirSheet(s);
+}
+
+/* =========================================================
+   FOLHA: COLAR LISTA (texto recebido por mensagem)
+   ========================================================= */
+function abrirColar(){
+  let texto = ''; let fase = 'texto'; let itens = []; let aviso = null;
+  /** Linha editável da prévia. */
+  const linhaHTML = (it, i) => {
+    const lugares = [...new Set([...Dados.cfg.mercados, ...itens.map(x => x.lugar)].filter(Boolean))];
+    const vinc = it.pid && Dados.produtos.get(it.pid);
+    return `<section class="cartao" style="margin:8px 0;padding:10px 12px${it.suspeito ? ';border-color:var(--danger)' : ''}">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><small style="color:var(--muted)">${vinc ? 'Já cadastrado' : 'Produto novo'}${it.suspeito ? ' (revisar)' : ''}</small><label class="sw"><input type="checkbox" data-i="${i}" data-k="incluir" ${it.incluir ? 'checked' : ''}><span></span>Incluir</label></div>
+      ${it.suspeito ? `<div class="aviso perigo" style="margin:6px 0">Texto suspeito (${esc(it.suspeito)}). Item desmarcado; revise antes de incluir.</div>` : ''}
+      <input class="campo" style="margin-top:6px;font-weight:600" data-i="${i}" data-k="nome" maxlength="60" value="${esc(it.nome)}" aria-label="Nome">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+        <input class="campo" data-i="${i}" data-k="qtd" inputmode="decimal" placeholder="qtd na hora" value="${it.qtd > 0 ? esc(String(it.qtd).replace('.', ',')) : ''}" aria-label="Quantidade">
+        <select class="campo" data-i="${i}" data-k="unidade" aria-label="Unidade"><option value="un" ${it.unidade !== 'kg' ? 'selected' : ''}>unidade</option><option value="kg" ${it.unidade === 'kg' ? 'selected' : ''}>kg</option></select>
+      </div>
+      <input class="campo" style="margin-top:8px" data-i="${i}" data-k="obs" maxlength="80" placeholder="Observação" value="${esc(it.obs || '')}" aria-label="Observação">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+        <select class="campo" data-i="${i}" data-k="categoriaId" aria-label="Categoria"><option value="">Sem categoria</option>${Dados.cfg.categorias.map(c => `<option value="${esc(c.id)}" ${it.categoriaId === c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}</select>
+        <select class="campo" data-i="${i}" data-k="lugar" aria-label="Onde comprar"><option value="">Qualquer lugar</option>${lugares.map(m => `<option value="${esc(m)}" ${it.lugar === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>
+      </div></section>`;
+  };
+  const s = {
+    titulo: 'Colar lista',
+    html(){
+      if (fase === 'rodando') return `<div class="ia-status" style="padding:30px 0"><div class="spin"></div><span>Salvando…</span></div>`;
+      if (fase === 'previa') {
+        const n = itens.filter(x => x.incluir && x.nome.trim()).length;
+        return `${aviso ? `<div class="aviso${aviso.perigo ? ' perigo' : ''}" style="margin-top:0">${esc(aviso.txt)}</div>` : ''}
+          <div class="contagem">Confira e ajuste antes de adicionar.</div>
+          ${itens.map(linhaHTML).join('')}
+          <div class="sheet-acoes"><button class="btn pri" data-a="confirmar" ${n ? '' : 'disabled'}>Adicionar ${n} ${n === 1 ? 'item' : 'itens'} à lista</button><button class="btn sec" data-a="voltar">Voltar ao texto</button></div>`;
+      }
+      return `<div class="contagem" style="margin-top:0">Cole a lista recebida por mensagem. Títulos como *Quitanda do Centro* viram sugestão de lugar para os itens abaixo deles.</div>
+        <textarea id="txtLista" class="campo" rows="12" maxlength="${LIMITE_LISTA}" placeholder="4 pct Feijão&#10;Leite&#10;*Quitanda do Centro*&#10;Batata" style="resize:vertical">${esc(texto)}</textarea>
+        <div class="sheet-acoes"><button class="btn pri" data-a="local">Organizar lista</button></div>
+        <div class="contagem">Quantidade no início da linha, marcas entre parênteses e títulos entre asteriscos são reconhecidos.</div>`;
+    },
+    montar(el){
+      const ta = el.querySelector('#txtLista'); if (ta) ta.addEventListener('input', () => { texto = ta.value; });
+      el.querySelectorAll('[data-i]').forEach(inp => {
+        const ev = inp.type === 'checkbox' || inp.tagName === 'SELECT' ? 'change' : 'input';
+        inp.addEventListener(ev, () => {
+          const it = itens[Number(inp.dataset.i)]; const k = inp.dataset.k;
+          if (k === 'incluir') { it.incluir = inp.checked; mostrarSheet(); }
+          else if (k === 'qtd') it.qtd = parseNum(inp.value) > 0 ? parseNum(inp.value) : null;
+          else if (k === 'categoriaId' || k === 'lugar') it[k] = inp.value || null;
+          else it[k] = inp.value;
+        });
+      });
+    },
+    acoes: {
+      local(){
+        if (!texto.trim()) return toast('Cole a lista primeiro.');
+        itens = lerListaLocal(texto.slice(0, LIMITE_LISTA)); aviso = null; fase = 'previa';
+        if (!itens.length) { fase = 'texto'; return toast('Nenhum item encontrado no texto.'); }
+        mostrarSheet();
+      },
+      voltar(){ fase = 'texto'; mostrarSheet(); },
+      async confirmar(){
+        const sel = itens.filter(x => x.incluir && x.nome.trim());
+        if (!sel.length) return;
+        fase = 'rodando'; mostrarSheet();
+        let novos = 0, ja = 0;
+        try {
+          for (const lugar of new Set(sel.map(x => x.lugar).filter(Boolean))) if (!Dados.cfg.mercados.includes(lugar)) Dados.salvarCfg(x => { x.mercados.push(lugar); x.mercados.sort((a, b) => a.localeCompare(b, 'pt-BR')); });
+          const c = editarCompraAberta(); const naLista = new Set(c.itens.map(i => i.pid));
+          for (const x of sel) {
+            const nome = capitalizar(x.nome).slice(0, 60);
+            let p = (x.pid && Dados.produtos.get(x.pid)) || acharProdutoPorNome(nome);
+            if (!p) {
+              p = {id: novoId(), nome, marca: '', tamanho: '', unidade: x.unidade === 'kg' ? 'kg' : 'un', categoriaId: x.categoriaId || null, codigo: '', fotoId: null, fotoData: null, criadoEm: Date.now(), atualizadoEm: Date.now()};
+              await Dados.gravarProduto(p);
+              novos++;
+            }
+            if (naLista.has(p.id)) { ja++; continue; }
+            naLista.add(p.id);
+            c.itens.push({pid: p.id, nome: p.nome, marca: p.marca || '', categoriaId: catDoProduto(p), unidade: p.unidade || 'un', qtd: x.qtd > 0 ? r3(x.qtd) : null, preco: null, comprado: false, obs: (x.obs || '').trim().slice(0, 80) || null, sugestao: x.lugar || null});
+          }
+          Dados.salvarCompra(c);
+          while (pilha.length) fecharSheet();
+          toast(`${sel.length - ja} itens na lista` + (novos ? `, ${novos} produtos novos cadastrados` : '') + (ja ? `, ${ja} já estavam na lista` : ''), null, 4500);
+        } catch (e) { fase = 'previa'; mostrarSheet(); falhaGravacao(e); }
+      },
+    },
+  };
+  abrirSheet(s);
+}
+
+/* =========================================================
+   TELA: PRODUTOS (catálogo)
+   ========================================================= */
+function telaProdutos(){
+  const ab = compraAberta(); const naLista = new Set(((ab && ab.itens) || []).map(i => i.pid));
+  let h = `<div class="busca"><input id="buscaProdutos" class="campo" type="search" placeholder="Buscar produto, marca ou categoria" value="${esc(buscaProdutos)}" autocomplete="off" aria-label="Buscar produtos"></div>`;
+  h += `<div class="grade-btn" style="margin:6px 0 4px"><button class="btn sec" data-a="scan-produtos">${ICONES.codigo}Ler código</button><button class="btn sec" data-a="digitar-produtos">${ICONES.teclado}Digitar código</button><button class="btn pri" data-a="novo-produto">${ICONES.mais}Novo produto</button></div>`;
+  h += `<div class="chips" role="group" aria-label="Filtrar por categoria"><button class="chip" data-a="filtro-prod" data-v="" aria-pressed="${!UI.catProdutos}">Todas</button>${Dados.cfg.categorias.map(c => `<button class="chip" data-a="filtro-prod" data-v="${esc(c.id)}" aria-pressed="${UI.catProdutos === c.id}"><i class="dot" style="background:${esc(c.cor)}"></i>${esc(c.nome)}</button>`).join('')}<button class="chip" data-a="filtro-prod" data-v="_sem" aria-pressed="${UI.catProdutos === '_sem'}">Sem categoria</button></div>`;
+  let lista = [...Dados.produtos.values()].filter(p => (!UI.catProdutos || (catDoProduto(p) || '_sem') === UI.catProdutos) && (!buscaProdutos.trim() || casa(textoBusca(p), buscaProdutos)));
+  if (!Dados.produtos.size) return h + `<div class="vazio"><strong>Nenhum produto cadastrado</strong>Cadastre pelo código de barras, pela foto ou digitando o nome.</div>`;
+  h += `<div class="contagem">${lista.length} ${lista.length === 1 ? 'produto' : 'produtos'}</div>`;
+  lista.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const grupos = agruparPorCategoria(lista, p => catDoProduto(p));
+  h += grupos.map(g => `<section class="grupo"><h3><i class="dot" style="background:${esc(g.cat.cor)}"></i>${esc(g.cat.nome)}</h3><div class="lista">${g.itens.map(p => {
+    const ult = ultimoPreco(p.id);
+    return `<div class="item">${thumbHTML(p, p.nome)}<button class="info" data-a="editar-produto" data-pid="${esc(p.id)}"><div class="nome">${esc(p.nome)}</div><div class="meta">${[p.marca, p.tamanho].filter(Boolean).length ? `<span>${esc([p.marca, p.tamanho].filter(Boolean).join(' '))}</span>` : ''}${ult ? `<span>último ${fmt(ult)}${p.unidade === 'kg' ? '/kg' : ''}</span>` : ''}</div></button>${naLista.has(p.id) ? '<span class="badge ok">Na lista</span>' : `<button class="mini-add" data-a="add-lista" data-pid="${esc(p.id)}">+ Lista</button>`}</div>`;
+  }).join('')}</div></section>`).join('');
+  if (!lista.length) h += `<div class="vazio"><strong>Nada encontrado</strong>${buscaProdutos.trim() ? `<div style="margin-top:12px"><button class="btn sec" data-a="novo-produto-busca-p">Cadastrar “${esc(buscaProdutos.trim())}”</button></div>` : ''}</div>`;
+  return h;
+}
+</script>
+<script>
+'use strict';
+/* =========================================================
+   RELATÓRIOS: período e agregações
+   ========================================================= */
+const PERIODOS = [['mes','Este mês'],['3m','3 meses'],['12m','12 meses'],['tudo','Tudo']];
+function inicioPeriodo(){
+  const d = new Date();
+  if (UI.periodo === 'mes') return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+  if (UI.periodo === '3m') return new Date(d.getFullYear(), d.getMonth() - 2, 1).getTime();
+  if (UI.periodo === '12m') return new Date(d.getFullYear(), d.getMonth() - 11, 1).getTime();
+  return 0;
+}
+const rotuloPeriodo = () => (PERIODOS.find(p => p[0] === UI.periodo) || PERIODOS[1])[1];
+const comprasNoPeriodo = () => { const i = inicioPeriodo(); return comprasFeitas().filter(c => c.finalizadaEm >= i); };
+/** Soma gastos por mês, categoria, produto e mercado. */
+function agregados(compras){
+  const porMes = new Map(), porCat = new Map(), porProd = new Map(), porMercado = new Map(), precosMercado = new Map();
+  let total = 0, itens = 0;
+  for (const c of compras) {
+    let tc = 0; const mer = c.mercado || 'Sem mercado';
+    for (const it of c.itens) {
+      if (!it.comprado || !(it.preco > 0)) continue;
+      const v = it.qtd * it.preco; tc += v; itens++;
+      const cid = catIdItem(it) || ''; porCat.set(cid, (porCat.get(cid) || 0) + v);
+      const pp = porProd.get(it.pid) || {pid: it.pid, nome: nomeItem(it), vezes: 0, gasto: 0, qtd: 0, un: unidadeItem(it)};
+      pp.vezes++; pp.gasto += v; pp.qtd += it.qtd; porProd.set(it.pid, pp);
+      const pm = precosMercado.get(it.pid) || new Map(); const l = pm.get(mer) || []; l.push(it.preco); pm.set(mer, l); precosMercado.set(it.pid, pm);
+    }
+    total += tc;
+    const mk = mesChave(c.finalizadaEm); porMes.set(mk, (porMes.get(mk) || 0) + tc);
+    const m = porMercado.get(mer) || {nome: mer, compras: 0, total: 0}; m.compras++; m.total += tc; porMercado.set(mer, m);
+  }
+  // mesmo produto em mercados diferentes
+  const comparacao = [];
+  for (const [pid, pm] of precosMercado) {
+    if (pm.size < 2) continue;
+    const medias = [...pm].map(([m, l]) => ({mercado: m, media: l.reduce((s, x) => s + x, 0) / l.length})).sort((a, b) => a.media - b.media);
+    const dif = (medias[medias.length - 1].media - medias[0].media) / medias[0].media * 100;
+    comparacao.push({pid, nome: nomeItem({pid, nome: porProd.get(pid).nome}), medias, dif});
+  }
+  comparacao.sort((a, b) => b.dif - a.dif);
+  return {total: r2(total), itens, n: compras.length, porMes, porCat, porProd, porMercado, comparacao};
+}
+/** Meses do período, inclusive os sem compra. */
+function mesesDoPeriodo(compras){
+  const fim = new Date(); let ini = inicioPeriodo();
+  if (!ini) ini = compras.length ? Math.min(...compras.map(c => c.finalizadaEm)) : Date.now();
+  const d = new Date(ini); d.setDate(1); const out = [];
+  while (d <= fim) { out.push(mesChave(d.getTime())); d.setMonth(d.getMonth() + 1); }
+  return out.slice(-24);
+}
+
+/* =========================================================
+   RELATÓRIOS: gráficos em SVG
+   ========================================================= */
+function svgBarras(dados){
+  const W = 340, H = 160, pad = 6, base = H - 20, n = Math.max(dados.length, 1);
+  const max = Math.max(...dados.map(d => d.valor), 1), bw = (W - pad * 2) / n;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Gasto por mês">`;
+  s += `<line x1="0" x2="${W}" y1="${base}" y2="${base}" stroke="var(--line)"/>`;
+  dados.forEach((d, i) => {
+    const h = Math.round(d.valor / max * (base - 26)); const w = Math.min(bw * 0.68, 46); const x = pad + i * bw + (bw - w) / 2; const y = base - h;
+    if (d.valor > 0) s += `<rect x="${x.toFixed(1)}" y="${y}" width="${w.toFixed(1)}" height="${Math.max(h, 2)}" rx="4" fill="var(--primary)"/>`;
+    const mostraRot = n <= 12 || i % 2 === n % 2 - 1 || i === n - 1;
+    if (mostraRot) s += `<text x="${(x + w / 2).toFixed(1)}" y="${H - 5}" text-anchor="middle" class="ax">${esc(d.rotulo)}</text>`;
+    if (d.valor > 0 && (n <= 6 || d.valor === max || i === n - 1)) s += `<text x="${(x + w / 2).toFixed(1)}" y="${y - 5}" text-anchor="middle" class="vl">${esc(curto(d.valor))}</text>`;
+  });
+  return s + '</svg>';
+}
+function svgLinha(pts){
+  const W = 340, H = 170, pl = 14, pr = 14, top = 22, bot = 26;
+  const ps = pts.map(p => p.preco); let min = Math.min(...ps), max = Math.max(...ps);
+  if (min === max) { min = min * 0.9; max = max * 1.1 || 1; }
+  const xs = i => pts.length === 1 ? W / 2 : pl + i * (W - pl - pr) / (pts.length - 1);
+  const ys = v => top + (1 - (v - min) / (max - min)) * (H - top - bot);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolução do preço">`;
+  s += `<line x1="0" x2="${W}" y1="${H - bot}" y2="${H - bot}" stroke="var(--line)"/>`;
+  if (pts.length > 1) s += `<polyline fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-linejoin="round" points="${pts.map((p, i) => xs(i).toFixed(1) + ',' + ys(p.preco).toFixed(1)).join(' ')}"/>`;
+  const iMin = ps.indexOf(Math.min(...ps)), iMax = ps.indexOf(Math.max(...ps));
+  pts.forEach((p, i) => {
+    s += `<circle cx="${xs(i).toFixed(1)}" cy="${ys(p.preco).toFixed(1)}" r="4" fill="var(--surface)" stroke="var(--primary)" stroke-width="2.5"/>`;
+    if (i === 0 || i === pts.length - 1 || i === iMin || i === iMax) {
+      const anc = i === 0 && pts.length > 1 ? 'start' : (i === pts.length - 1 && pts.length > 1 ? 'end' : 'middle');
+      s += `<text x="${xs(i).toFixed(1)}" y="${(ys(p.preco) - 9).toFixed(1)}" text-anchor="${anc}" class="vl">${esc(fmt(p.preco))}</text>`;
+    }
+  });
+  s += `<text x="${pl}" y="${H - 6}" class="ax">${esc(fmtData(pts[0].data))}</text>`;
+  if (pts.length > 1) s += `<text x="${W - pr}" y="${H - 6}" text-anchor="end" class="ax">${esc(fmtData(pts[pts.length - 1].data))}</text>`;
+  return s + '</svg>';
+}
+
+/* =========================================================
+   TELA: RELATÓRIOS
+   ========================================================= */
+function telaRelatorios(){
+  let h = `<div class="chips" role="group" aria-label="Período" style="margin-top:6px">${PERIODOS.map(([v, r]) => `<button class="chip" data-a="periodo" data-v="${v}" aria-pressed="${UI.periodo === v}">${r}</button>`).join('')}</div>`;
+  const todas = comprasFeitas();
+  if (!todas.length) return h + `<div class="vazio"><strong>Ainda não há compras finalizadas</strong>Os relatórios aparecem depois que você finalizar a primeira compra.</div>`;
+  const compras = comprasNoPeriodo(); const a = agregados(compras);
+  h += `<div class="stats"><div class="stat"><small>Total gasto</small><b>${fmt(a.total)}</b></div><div class="stat"><small>Compras</small><b>${a.n}</b></div><div class="stat"><small>Média por compra</small><b>${fmt(a.n ? a.total / a.n : 0)}</b></div><div class="stat"><small>Itens comprados</small><b>${a.itens}</b></div></div>`;
+  if (Cap.downloads) h += `<div class="linha-topo"><button class="btn sec" data-a="exp-pdf">Baixar PDF</button><button class="btn sec" data-a="exp-xlsx">Baixar planilha</button></div>`;
+  if (!compras.length) return h + `<div class="vazio"><strong>Nenhuma compra neste período</strong>Escolha um período maior.</div>` + historicoHTML(todas);
+  // gasto por mês
+  const meses = mesesDoPeriodo(compras);
+  h += `<section class="cartao"><h2>Gasto por mês</h2><div class="grafico">${svgBarras(meses.map(k => ({rotulo: mesNome(k), valor: a.porMes.get(k) || 0})))}</div></section>`;
+  // por categoria
+  const cats = [...a.porCat].sort((x, y) => y[1] - x[1]); const maxCat = Math.max(...cats.map(c => c[1]), 1);
+  h += `<section class="cartao"><h2>Por categoria</h2>${cats.map(([cid, v]) => { const c = cid ? categoria(cid) : SEM_CAT; return `<div class="barra-h"><span class="nm">${esc(c.nome)}</span><span class="trilho"><i style="width:${(v / maxCat * 100).toFixed(1)}%;background:${esc(c.cor)}"></i></span><span class="vl">${fmt(v)} <small style="color:var(--muted);font-weight:500">${Math.round(v / a.total * 100)}%</small></span></div>`; }).join('')}</section>`;
+  // evolução de preço
+  const hist = indice().hist; let pid = UI.produtoGrafico;
+  if (!pid || !(hist.get(pid) || []).some(x => x.finalizada)) { const top = [...a.porProd.values()].sort((x, y) => y.vezes - x.vezes)[0]; pid = top ? top.pid : null; }
+  if (pid) {
+    const pts = (hist.get(pid) || []).filter(x => x.finalizada).slice(-24);
+    const nome = Dados.produtos.get(pid)?.nome || a.porProd.get(pid)?.nome || 'Produto';
+    const media = pts.reduce((s, x) => s + x.preco, 0) / pts.length;
+    h += `<section class="cartao"><h2>Evolução do preço</h2><button class="chip" data-a="escolher-grafico" style="margin-bottom:10px">${esc(nome)} <small>trocar</small></button><div class="grafico">${svgLinha(pts)}</div><div class="contagem">${pts.length} ${pts.length === 1 ? 'registro' : 'registros'}, média ${fmt(media)}, menor ${fmt(Math.min(...pts.map(x => x.preco)))}</div></section>`;
+  }
+  // mercados
+  const mers = [...a.porMercado.values()].sort((x, y) => y.total - x.total);
+  h += `<section class="cartao"><h2>Mercados</h2><div class="tabela-wrap"><table class="tab"><thead><tr><th>Mercado</th><th class="num">Compras</th><th class="num">Total</th><th class="num">Média</th></tr></thead><tbody>${mers.map(m => `<tr><td>${esc(m.nome)}</td><td class="num">${m.compras}</td><td class="num">${fmt(m.total)}</td><td class="num">${fmt(m.total / m.compras)}</td></tr>`).join('')}</tbody></table></div>`;
+  if (a.comparacao.length) h += `<h2 style="margin-top:16px">Mesmo produto, mercados diferentes</h2><div class="sub">Preço médio pago em cada mercado; o mais barato em destaque</div>${a.comparacao.slice(0, 10).map(c => `<div style="padding:8px 0;border-top:1px solid var(--line)"><div class="nome" style="white-space:normal">${esc(c.nome)} <span class="badge">${Math.round(c.dif)}% de diferença</span></div><div class="meta">${c.medias.map((m, i) => `<span class="${i === 0 ? 'melhor' : ''}">${esc(m.mercado)} ${fmt(m.media)}</span>`).join('')}</div></div>`).join('')}`;
+  else h += `<div class="contagem" style="margin-top:10px">Compre o mesmo produto em mercados diferentes para ver a comparação de preços.</div>`;
+  h += `</section>`;
+  // ranking
+  const rk = [...a.porProd.values()].sort((x, y) => y.vezes - x.vezes || y.gasto - x.gasto).slice(0, 10);
+  h += `<section class="cartao"><h2>Mais comprados</h2><div class="tabela-wrap"><table class="tab"><thead><tr><th>Produto</th><th class="num">Vezes</th><th class="num">Gasto</th></tr></thead><tbody>${rk.map(p => `<tr><td>${esc(p.nome)}</td><td class="num">${p.vezes}</td><td class="num">${fmt(p.gasto)}</td></tr>`).join('')}</tbody></table></div></section>`;
+  return h + historicoHTML(compras);
+}
+/** Lista de compras finalizadas. */
+function historicoHTML(compras){
+  return `<section class="cartao"><h2>Histórico de compras</h2>${compras.slice(0, 60).map(c => `<button class="compra-linha" data-a="ver-compra" data-id="${esc(c.id)}"><span><b>${fmtData(c.finalizadaEm)}</b><small>${esc(c.mercado || 'Sem mercado')}, ${c.itens.length} ${c.itens.length === 1 ? 'item' : 'itens'}</small></span><b>${fmt(c.total ?? totais(c).gasto)}</b></button>`).join('')}</section>`;
+}
+/** Detalhe de uma compra finalizada. */
+function abrirCompra(id){
+  const c = Dados.compras.get(id); if (!c) return;
+  abrirSheet({
+    titulo: 'Compra de ' + fmtData(c.finalizadaEm),
+    html: () => `<div class="kv"><span>Mercado</span><b>${esc(c.mercado || 'Sem mercado')}</b><span>Total</span><b>${fmt(c.total ?? totais(c).gasto)}</b>${c.orcamento ? `<span>Orçamento</span><b>${fmt(c.orcamento)}</b>` : ''}</div>
+      <div class="tabela-wrap" style="margin-top:12px"><table class="tab"><thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Preço</th><th class="num">Subtotal</th></tr></thead><tbody>${c.itens.map(it => `<tr><td>${esc(nomeItem(it))}</td><td class="num">${esc(fmtQtd(it.qtd, unidadeItem(it)))}</td><td class="num">${fmt(it.preco)}</td><td class="num">${fmt(it.qtd * it.preco)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="sheet-acoes"><button class="btn pri" data-a="repetir-esta">Repetir esta compra na lista</button></div>
+      <div class="sheet-acoes"><button class="btn texto perigo-txt" data-a="excluir-compra">Excluir esta compra do histórico</button></div>`,
+    acoes: {
+      'repetir-esta'(){ repetirCompra(id); fecharSheet(); },
+      async 'excluir-compra'(){ if (await confirmar('Excluir esta compra do histórico? Os relatórios serão recalculados.', 'Excluir', true)) { Dados.excluirCompra(id); fecharSheet(); toast('Compra excluída'); } },
+    },
+  });
+}
+/** Escolha do produto do gráfico de preço. */
+function abrirEscolhaGrafico(){
+  let q = '';
+  const comHist = () => [...indice().hist.keys()].filter(pid => Dados.produtos.has(pid) && indice().hist.get(pid).some(x => x.finalizada)).map(pid => Dados.produtos.get(pid));
+  const res = () => ordenarProdutos(comHist().filter(p => !q.trim() || casa(textoBusca(p), q))).slice(0, 80).map(p => `<button class="compra-linha" data-a="graf" data-pid="${esc(p.id)}"><span>${esc(p.nome)}<small>${esc([p.marca, p.tamanho].filter(Boolean).join(' '))}</small></span><span class="badge">${indice().hist.get(p.id).filter(x => x.finalizada).length}</span></button>`).join('') || '<div class="contagem">Nenhum produto encontrado.</div>';
+  abrirSheet({
+    titulo: 'Produto do gráfico',
+    html: () => `<input id="buscaGraf" class="campo" type="search" placeholder="Buscar produto" autocomplete="off"><div id="grafRes" style="margin-top:8px">${res()}</div>`,
+    montar(el){ const i = el.querySelector('#buscaGraf'); i.addEventListener('input', () => { q = i.value; el.querySelector('#grafRes').innerHTML = res(); }); },
+    acoes: { graf(b){ UI.produtoGrafico = b.dataset.pid; salvarUI(); fecharSheet(); agendarRender(); } },
+  });
+}
+
+/* =========================================================
+   EXPORTAÇÃO (PDF e planilha)
+   ========================================================= */
+/** Entrega um arquivo ao usuário pela capacidade de downloads. */
+async function baixar(nome, blob){
+  try { await Cap.downloads.save({filename: nome, data: blob}); }
+  catch (e) {
+    if (e && e.code === 'declined') return;
+    if (e && e.code === 'rate_limited') return toast('Aguarde um instante e tente de novo.');
+    toast('Não foi possível gerar o download.');
+  }
+}
+const dataArquivo = () => new Date().toISOString().slice(0, 10);
+/** Relatório em PDF com resumo, gráfico mensal e tabelas. */
+async function exportarPDF(){
+  toast('Gerando o PDF…', null, 8000);
+  try { await carregarScript(URL_JSPDF); await carregarScript(URL_AUTOTABLE); } catch { return toast('Não foi possível carregar o gerador de PDF. Verifique a conexão.'); }
+  const {jsPDF} = window.jspdf; const doc = new jsPDF({unit: 'mm', format: 'a4'});
+  const compras = comprasNoPeriodo(); const a = agregados(compras);
+  const VERDE = [30, 107, 82], TINTA = [27, 37, 35], CINZA = [92, 106, 102];
+  const fmtPdf = v => fmt(v).replace(/\u00a0/g, ' ');
+  let y = 18;
+  const novaPagina = alt => { if (y + alt > 282) { doc.addPage(); y = 18; } };
+  const titulo = t => { novaPagina(16); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...TINTA); doc.text(t, 14, y); y += 4; doc.setDrawColor(...VERDE); doc.setLineWidth(0.6); doc.line(14, y, 196, y); y += 5; };
+  const tabela = (head, body, alinhaDir) => {
+    doc.autoTable({startY: y, head: [head], body, theme: 'plain', margin: {left: 14, right: 14},
+      styles: {font: 'helvetica', fontSize: 9, textColor: TINTA, cellPadding: 1.8},
+      headStyles: {fillColor: VERDE, textColor: [255, 255, 255], fontStyle: 'bold'},
+      alternateRowStyles: {fillColor: [244, 247, 245]},
+      columnStyles: Object.fromEntries(alinhaDir.map(i => [i, {halign: 'right'}]))});
+    y = doc.lastAutoTable.finalY + 8;
+  };
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(19); doc.setTextColor(...TINTA); doc.text('Relatório de compras da casa', 14, y); y += 7;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...CINZA);
+  doc.text(`Período: ${rotuloPeriodo()}. Gerado em ${new Date().toLocaleString('pt-BR')}.`, 14, y); y += 8;
+  [['Total gasto', fmtPdf(a.total)], ['Compras', String(a.n)], ['Média por compra', fmtPdf(a.n ? a.total / a.n : 0)], ['Itens comprados', String(a.itens)]].forEach((c, i) => {
+    const x = 14 + i * 46; doc.setFillColor(237, 241, 238); doc.roundedRect(x, y, 43, 19, 2, 2, 'F');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...CINZA); doc.text(c[0], x + 3, y + 6);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(...TINTA); doc.text(c[1], x + 3, y + 14);
+  });
+  y += 28;
+  if (compras.length) {
+    titulo('Gasto por mês');
+    const meses = mesesDoPeriodo(compras); const vals = meses.map(k => a.porMes.get(k) || 0); const max = Math.max(...vals, 1);
+    novaPagina(52); const base = y + 40, larg = 182 / meses.length;
+    meses.forEach((k, i) => {
+      const hgt = vals[i] / max * 32; const w = Math.min(larg * 0.66, 14); const x = 14 + i * larg + (larg - w) / 2;
+      if (vals[i] > 0) { doc.setFillColor(...VERDE); doc.rect(x, base - hgt, w, hgt, 'F'); doc.setFontSize(7); doc.setTextColor(...TINTA); doc.text(curto(vals[i]), x + w / 2, base - hgt - 1.5, {align: 'center'}); }
+      doc.setFontSize(7); doc.setTextColor(...CINZA); doc.text(mesNome(k), x + w / 2, base + 4, {align: 'center'});
+    });
+    y = base + 11;
+    titulo('Por categoria');
+    tabela(['Categoria', 'Gasto', '% do total'], [...a.porCat].sort((p, q) => q[1] - p[1]).map(([cid, v]) => [(cid ? categoria(cid) : SEM_CAT).nome, fmtPdf(v), Math.round(v / a.total * 100) + '%']), [1, 2]);
+    titulo('Mercados');
+    tabela(['Mercado', 'Compras', 'Total', 'Média por compra'], [...a.porMercado.values()].sort((p, q) => q.total - p.total).map(m => [m.nome, String(m.compras), fmtPdf(m.total), fmtPdf(m.total / m.compras)]), [1, 2, 3]);
+    if (a.comparacao.length) { titulo('Mesmo produto, mercados diferentes'); tabela(['Produto', 'Mais barato', 'Mais caro', 'Diferença'], a.comparacao.slice(0, 15).map(c => [c.nome, `${c.medias[0].mercado} ${fmtPdf(c.medias[0].media)}`, `${c.medias[c.medias.length - 1].mercado} ${fmtPdf(c.medias[c.medias.length - 1].media)}`, Math.round(c.dif) + '%']), [3]); }
+    titulo('Mais comprados');
+    tabela(['Produto', 'Vezes', 'Quantidade', 'Gasto'], [...a.porProd.values()].sort((p, q) => q.vezes - p.vezes || q.gasto - p.gasto).slice(0, 20).map(p => [p.nome, String(p.vezes), fmtQtd(p.qtd, p.un), fmtPdf(p.gasto)]), [1, 2, 3]);
+    titulo('Histórico de compras');
+    tabela(['Data', 'Mercado', 'Itens', 'Total'], compras.map(c => [fmtData(c.finalizadaEm), c.mercado || 'Sem mercado', String(c.itens.length), fmtPdf(c.total ?? totais(c).gasto)]), [2, 3]);
+  }
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(...CINZA); doc.text(`Compras da casa ${VERSAO}   Página ${i} de ${n}`, 196, 290, {align: 'right'}); }
+  esconderToast();
+  await baixar(`relatorio-compras-${dataArquivo()}.pdf`, doc.output('blob'));
+}
+/** Planilha com itens, compras, meses, categorias e catálogo. */
+async function exportarXLSX(){
+  toast('Gerando a planilha…', null, 8000);
+  try { await carregarScript(URL_XLSX); } catch { return toast('Não foi possível carregar o gerador de planilhas. Verifique a conexão.'); }
+  const X = window.XLSX; const compras = comprasNoPeriodo(); const a = agregados(compras);
+  const itens = [];
+  for (const c of compras) for (const it of c.itens) if (it.comprado) itens.push({'Data': new Date(c.finalizadaEm), 'Mercado': c.mercado || '', 'Produto': nomeItem(it), 'Marca': Dados.produtos.get(it.pid)?.marca || it.marca || '', 'Categoria': (catIdItem(it) ? categoria(catIdItem(it)) : SEM_CAT).nome, 'Quantidade': it.qtd, 'Unidade': unidadeItem(it), 'Preço unitário': it.preco, 'Subtotal': r2(it.qtd * it.preco)});
+  const wb = X.utils.book_new();
+  const add = (linhas, nome, larg) => { const ws = X.utils.json_to_sheet(linhas.length ? linhas : [{'Sem dados': ''}], {cellDates: true}); if (larg) ws['!cols'] = larg.map(w => ({wch: w})); X.utils.book_append_sheet(wb, ws, nome); };
+  add(itens, 'Itens comprados', [11, 18, 32, 16, 20, 11, 8, 14, 12]);
+  add(compras.map(c => ({'Data': new Date(c.finalizadaEm), 'Mercado': c.mercado || '', 'Itens': c.itens.length, 'Total': c.total ?? totais(c).gasto, 'Orçamento': c.orcamento || ''})), 'Compras', [11, 18, 8, 12, 12]);
+  add(mesesDoPeriodo(compras).map(k => ({'Mês': mesNome(k), 'Gasto': r2(a.porMes.get(k) || 0)})), 'Por mês', [10, 12]);
+  add([...a.porCat].sort((p, q) => q[1] - p[1]).map(([cid, v]) => ({'Categoria': (cid ? categoria(cid) : SEM_CAT).nome, 'Gasto': r2(v), '% do total': a.total ? r2(v / a.total * 100) : 0})), 'Por categoria', [22, 12, 11]);
+  add([...Dados.produtos.values()].sort((p, q) => p.nome.localeCompare(q.nome, 'pt-BR')).map(p => ({'Produto': p.nome, 'Marca': p.marca || '', 'Tamanho': p.tamanho || '', 'Categoria': categoria(catDoProduto(p)).nome, 'Unidade': p.unidade || 'un', 'Código de barras': p.codigo || '', 'Último preço': ultimoPreco(p.id) || '', 'Preço médio': mediaPreco(p.id) ? r2(mediaPreco(p.id)) : ''})), 'Catálogo', [32, 16, 10, 20, 8, 16, 12, 12]);
+  const out = X.write(wb, {bookType: 'xlsx', type: 'array'});
+  esconderToast();
+  await baixar(`compras-${dataArquivo()}.xlsx`, new Blob([out], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+}
+
+/* =========================================================
+   TELA: AJUSTES
+   ========================================================= */
+const svgLixo = '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
+function telaAjustes(){
+  const cfg = Dados.cfg;
+  let h = `<h2 class="secao-titulo">Categorias</h2><section class="cartao">`;
+  h += cfg.categorias.map(c => `<div class="cfg-linha"><button class="cor-btn" style="background:${esc(c.cor)}" data-a="cat-cor" data-id="${esc(c.id)}" aria-label="Trocar cor de ${esc(c.nome)}"></button><input class="campo" data-ch="cat-nome" data-id="${esc(c.id)}" value="${esc(c.nome)}" maxlength="30" aria-label="Nome da categoria"><button class="ico-btn" data-a="cat-excluir" data-id="${esc(c.id)}" aria-label="Excluir ${esc(c.nome)}">${svgLixo}</button></div>`).join('');
+  h += `<div class="campo-linha" style="margin-top:10px"><input id="novaCat" class="campo" maxlength="30" placeholder="Nova categoria" autocomplete="off"><button class="btn pri" data-a="cat-add">Adicionar</button></div></section>`;
+  h += `<h2 class="secao-titulo">Mercados</h2><section class="cartao">${cfg.mercados.length ? `<div class="chips quebra">${cfg.mercados.map(m => `<button class="chip" data-a="mer-excluir" data-v="${esc(m)}" aria-label="Remover ${esc(m)}">${esc(m)} <small>remover</small></button>`).join('')}</div>` : '<div class="contagem">Os mercados aparecem aqui quando você escolhe um na lista.</div>'}</section>`;
+  h += `<h2 class="secao-titulo">Preferências</h2><section class="cartao">
+    <div class="cfg-linha"><span style="flex:1">Alerta de preço acima da média</span><input class="campo" style="width:84px;text-align:right" data-ch="alerta" inputmode="numeric" value="${esc(cfg.alertaPct)}" aria-label="Percentual do alerta"><span>%</span></div>
+    <div class="cfg-linha"><label class="sw" style="flex:1;justify-content:space-between">Modo mercado (botões grandes)<input type="checkbox" data-ch="modo-mercado" ${UI.modoMercado ? 'checked' : ''}><span></span></label></div>
+    <div class="cfg-linha"><label class="sw" style="flex:1;justify-content:space-between">Ocultar itens comprados<input type="checkbox" data-ch="ocultar" ${UI.ocultarComprados ? 'checked' : ''}><span></span></label></div>
+  </section>`;
+  h += `<h2 class="secao-titulo">Backup</h2><section class="cartao"><div class="sub" style="margin:0 0 10px">Cópia completa dos produtos, compras e ajustes em um arquivo.</div><div class="grade-btn">${Cap.downloads ? '<button class="btn sec" data-a="backup">Baixar backup</button>' : ''}${botaoArquivo('restaurar', 'Importar backup', {accept: 'application/json,.json', icone: 'arquivo'})}</div></section>`;
+  h += instalarHTML();
+  h += `<h2 class="secao-titulo">Segurança da IA</h2><section class="cartao"><div class="sub" style="margin:0 0 10px">Respostas fora do formato e textos suspeitos lidos nas fotos ficam registrados aqui.</div><div class="log">${(cfg.logSeg || []).length ? cfg.logSeg.map(l => `<div><b>${esc(l.tipo)}</b> em ${esc(new Date(l.em).toLocaleString('pt-BR'))}<br>${esc(l.detalhe)}</div>`).join('') : '<div>Nenhum evento registrado.</div>'}</div>${(cfg.logSeg || []).length ? '<button class="btn texto" data-a="limpar-log">Limpar registros</button>' : ''}</section>`;
+  h += `<h2 class="secao-titulo">Sobre</h2><section class="cartao"><div class="kv"><span>Versão</span><b>${VERSAO}</b><span>Dados</span><b>Neste aparelho${armazenamento.persistente ? ' (protegidos contra limpeza automática)' : ''}</b><span>Espaço usado</span><b>${esc(armazenamento.uso || 'calculando')}</b><span>Produtos</span><b>${Dados.produtos.size}</b><span>Compras</span><b>${comprasFeitas().length}</b></div></section>`;
+  return h;
+}
+/** Restaura backup validando a estrutura e os campos permitidos. */
+async function restaurarBackup(arq){
+  if (!arq) return;
+  let o; try { o = JSON.parse(await arq.text()); } catch { return toast('Arquivo inválido.'); }
+  if (!o || typeof o !== 'object' || !Array.isArray(o.produtos) || !Array.isArray(o.compras)) return toast('Este arquivo não é um backup do app.');
+  const str = (v, m) => typeof v === 'string' ? v.slice(0, m) : '';
+  const produtos = o.produtos.filter(p => p && typeof p.id === 'string' && /^[\w-]{1,60}$/.test(p.id) && typeof p.nome === 'string').map(p => ({
+    id: p.id, nome: str(p.nome, 60), marca: str(p.marca, 40), tamanho: str(p.tamanho, 20), unidade: p.unidade === 'kg' ? 'kg' : 'un',
+    categoriaId: typeof p.categoriaId === 'string' ? p.categoriaId.slice(0, 60) : null, codigo: /^\d{8,14}$/.test(p.codigo || '') ? p.codigo : '',
+    fotoId: /^[0-9a-f]{32}$/.test(p.fotoId || '') ? p.fotoId : null, fotoData: typeof p.fotoData === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(p.fotoData) && p.fotoData.length < 200000 ? p.fotoData : null,
+    criadoEm: Number(p.criadoEm) || Date.now(), ...(MEDIDAS[p.medida] ? {medida: p.medida} : {}),
+    comparacoes: Array.isArray(p.comparacoes) ? p.comparacoes.slice(-40).filter(r => r && Number(r.unit) > 0 && MEDIDAS[r.medida]).map(r => ({em: Number(r.em) || 0, lugar: str(r.lugar, 40), medida: r.medida, marca: str(r.marca, 40), preco: Number(r.preco) || 0, qtdEmb: Number(r.qtdEmb) || 1, tam: Number(r.tam) || 0, sub: str(r.sub, 10), promo: str(r.promo, 10), unit: Number(r.unit)})) : []}));
+  const temAberta = !!compraAberta();
+  const item = it => ({pid: str(it.pid, 60), nome: str(it.nome, 60), marca: str(it.marca, 40), categoriaId: typeof it.categoriaId === 'string' ? it.categoriaId.slice(0, 60) : null, unidade: it.unidade === 'kg' ? 'kg' : 'un', qtd: Number(it.qtd) > 0 ? Number(it.qtd) : null, preco: Number(it.preco) > 0 ? Number(it.preco) : null, comprado: !!it.comprado, obs: str(it.obs, 80) || null, sugestao: str(it.sugestao, 40) || null, local: str(it.local, 40) || null, marcaCompra: str(it.marcaCompra, 40) || null, ...(it.compradoEm ? {compradoEm: Number(it.compradoEm)} : {})});
+  const compras = o.compras.filter(c => c && typeof c.id === 'string' && /^[\w-]{1,60}$/.test(c.id) && Array.isArray(c.itens) && (c.status === 'finalizada' || (c.status === 'aberta' && !temAberta))).map(c => ({
+    id: c.id, status: c.status, mercado: str(c.mercado, 40), orcamento: Number(c.orcamento) > 0 ? Number(c.orcamento) : null, criadaEm: Number(c.criadaEm) || Date.now(),
+    ...(c.status === 'finalizada' ? {finalizadaEm: Number(c.finalizadaEm) || Date.now(), total: Number(c.total) || 0} : {}), itens: c.itens.filter(it => it && typeof it.pid === 'string').map(item)}));
+  if (!(await confirmar(`Importar ${produtos.length} produtos e ${compras.length} compras? Itens com o mesmo identificador serão substituídos.`, 'Importar'))) return;
+  toast('Importando…', null, 60000);
+  try {
+    await Dados.importar(produtos, compras);
+    if (o.cfg && Array.isArray(o.cfg.categorias)) Dados.salvarCfg(c => {
+      for (const k of o.cfg.categorias) if (k && typeof k.id === 'string' && typeof k.nome === 'string' && !c.categorias.some(x => x.id === k.id)) c.categorias.push({id: k.id.slice(0, 60), nome: k.nome.slice(0, 30), cor: /^#[0-9a-fA-F]{6}$/.test(k.cor) ? k.cor : CORES[0]});
+      if (Array.isArray(o.cfg.mercados)) for (const m of o.cfg.mercados) if (typeof m === 'string' && !c.mercados.includes(m.slice(0, 40))) c.mercados.push(m.slice(0, 40));
+    });
+    esconderToast(); toast('Backup importado');
+  } catch (e) { esconderToast(); falhaGravacao(e); }
+}
+
+/* =========================================================
+   AÇÕES (cliques e alterações delegadas)
+   ========================================================= */
+const ACOES = {
+  tab(b){ salvarScroll(); UI.tab = b.dataset.v; salvarUI(); render(); window.scrollTo(0, lerScroll()); },
+  'fechar-sheet'(){ fecharSheet(); },
+  // lista
+  mercado(){ abrirMercado(); },
+  orcamento(){ definirOrcamento(); },
+  'filtro-cat'(b){ UI.filtroCat = b.dataset.v; salvarUI(); render(); },
+  'mostrar-comprados'(){ UI.ocultarComprados = false; salvarUI(); render(); },
+  check(b){
+    const pid = b.dataset.pid; const c0 = compraAberta(); const it0 = c0 && c0.itens.find(i => i.pid === pid); if (!it0) return;
+    if (it0.comprado) { const c = clone(c0); const it = c.itens.find(i => i.pid === pid); it.comprado = false; delete it.compradoEm; delete it.local; Dados.salvarCompra(c); return; }
+    if (!(it0.preco > 0) || !(it0.qtd > 0)) return abrirItem(pid, true);
+    exigirLugar(() => { const c = editarCompraAberta(); const it = c.itens.find(i => i.pid === pid); if (!it) return; Object.assign(it, {comprado: true, compradoEm: Date.now(), local: c.mercado}); Dados.salvarCompra(c); toast(nomeItem(it) + ' no carrinho'); });
+  },
+  colar(){ abrirColar(); },
+  item(b){ abrirItem(b.dataset.pid); },
+  adicionar(){ abrirAdicionar(); },
+  'add-sug'(b){ if (addNaLista(b.dataset.pid)) toast(Dados.produtos.get(b.dataset.pid).nome + ' adicionado'); },
+  'add-lista'(b){ if (addNaLista(b.dataset.pid)) toast(Dados.produtos.get(b.dataset.pid).nome + ' adicionado à lista'); },
+  'novo-produto-busca'(){ abrirProduto(null, {nome: buscaLista.trim(), adicionarNaLista: true}); },
+  finalizar(){ finalizarCompra(); },
+  repetir(b){ repetirCompra(b.dataset.id); },
+  // produtos
+  'filtro-prod'(b){ UI.catProdutos = b.dataset.v; salvarUI(); render(); },
+  'novo-produto'(){ abrirProduto(null, {nome: buscaProdutos.trim()}); },
+  'novo-produto-busca-p'(){ abrirProduto(null, {nome: buscaProdutos.trim()}); },
+  'editar-produto'(b){ abrirProduto(b.dataset.pid); },
+  async 'scan-produtos'(){ const c = await lerCodigoAoVivo(); if (c) tratarCodigoLido(c, false); },
+  async instalar(){ if (!_promptInstalar) return; _promptInstalar.prompt(); try { await _promptInstalar.userChoice; } catch {} _promptInstalar = null; render(); },
+  async 'digitar-produtos'(){ const c = await digitarCodigo(); if (c) tratarCodigoLido(c, false); },
+  // relatórios
+  periodo(b){ UI.periodo = b.dataset.v; salvarUI(); render(); },
+  'escolher-grafico'(){ abrirEscolhaGrafico(); },
+  'ver-compra'(b){ abrirCompra(b.dataset.id); },
+  'exp-pdf'(){ exportarPDF(); },
+  'exp-xlsx'(){ exportarXLSX(); },
+  // ajustes
+  'cat-cor'(b){ Dados.salvarCfg(c => { const k = c.categorias.find(x => x.id === b.dataset.id); if (k) k.cor = CORES[(CORES.indexOf(k.cor) + 1) % CORES.length]; }); },
+  'cat-add'(){
+    const i = $('#novaCat'); const nome = (i.value || '').trim().slice(0, 30); if (!nome) return toast('Informe o nome da categoria.');
+    if (Dados.cfg.categorias.some(x => norm(x.nome) === norm(nome))) return toast('Essa categoria já existe.');
+    Dados.salvarCfg(c => c.categorias.push({id: 'c' + novoId(), nome, cor: CORES[c.categorias.length % CORES.length]})); toast('Categoria criada');
+  },
+  async 'cat-excluir'(b){
+    const k = Dados.cfg.categorias.find(x => x.id === b.dataset.id); if (!k) return;
+    const n = [...Dados.produtos.values()].filter(p => p.categoriaId === k.id).length;
+    if (!(await confirmar(`Excluir a categoria "${k.nome}"?` + (n ? ` ${n} ${n === 1 ? 'produto ficará' : 'produtos ficarão'} sem categoria.` : ''), 'Excluir', true))) return;
+    Dados.salvarCfg(c => { c.categorias = c.categorias.filter(x => x.id !== k.id); });
+    if (UI.filtroCat === k.id) UI.filtroCat = ''; if (UI.catProdutos === k.id) UI.catProdutos = ''; salvarUI();
+  },
+  async 'mer-excluir'(b){ if (await confirmar(`Remover "${b.dataset.v}" da lista de mercados? O histórico não muda.`, 'Remover')) Dados.salvarCfg(c => { c.mercados = c.mercados.filter(m => m !== b.dataset.v); }); },
+  async backup(){
+    const dados = {app: 'compras-da-casa', versao: VERSAO, geradoEm: new Date().toISOString(), produtos: [...Dados.produtos.values()], compras: [...Dados.compras.values()], cfg: Dados.cfg};
+    await baixar(`compras-backup-${dataArquivo()}.json`, new Blob([JSON.stringify(dados)], {type: 'application/json'}));
+  },
+  restaurar(el, arq){ restaurarBackup(arq); },
+  'limpar-log'(){ Dados.salvarCfg(c => { c.logSeg = []; }); },
+};
+/** Alterações de campos (chaves e textos dos ajustes). */
+const ALTERACOES = {
+  ocultar(i){ UI.ocultarComprados = i.checked; salvarUI(); render(); },
+  'modo-mercado'(i){ UI.modoMercado = i.checked; salvarUI(); render(); },
+  'cat-nome'(i){ const nome = i.value.trim().slice(0, 30); if (!nome) { render(); return toast('O nome não pode ficar vazio.'); } Dados.salvarCfg(c => { const k = c.categorias.find(x => x.id === i.dataset.id); if (k) k.nome = nome; }); },
+  alerta(i){ const v = Math.round(parseNum(i.value)); if (!(v >= 1 && v <= 200)) { render(); return toast('Use um valor entre 1% e 200%.'); } Dados.salvarCfg(c => { c.alertaPct = v; }); },
+};
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-a]'); if (!el) return;
+  const a = el.dataset.a; const s = topoSheet();
+  if (s && el.closest('#sheet-root') && s.acoes && s.acoes[a]) { e.preventDefault(); s.acoes[a](el, e); return; }
+  if (ACOES[a]) { e.preventDefault(); ACOES[a](el, e); }
+});
+document.addEventListener('change', e => {
+  // botões de arquivo: entrega o arquivo à ação da folha ou da tela
+  const inp = e.target.closest('input[data-arq]');
+  if (inp) {
+    pararVigia();
+    const arq = inp.files && inp.files[0]; const a = inp.dataset.arq; inp.value = '';
+    if (!arq) return;
+    const s = topoSheet();
+    if (s && inp.closest('#sheet-root') && s.acoes && s.acoes[a]) s.acoes[a](inp, arq);
+    else if (ACOES[a]) ACOES[a](inp, arq);
+    return;
+  }
+  const el = e.target.closest('[data-ch]'); if (el && ALTERACOES[el.dataset.ch]) ALTERACOES[el.dataset.ch](el);
+});
+document.addEventListener('click', e => { if (e.target.closest('[data-arq-label]')) vigiarSeletor(); }, true);
+document.addEventListener('input', e => {
+  if (e.target.id === 'buscaLista') { buscaLista = e.target.value; render(); }
+  else if (e.target.id === 'buscaProdutos') { buscaProdutos = e.target.value; render(); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { if ($('#modal-root').classList.contains('on')) return; if (topoSheet()) fecharSheet(); } });
+let _scrollT = null;
+window.addEventListener('scroll', () => { clearTimeout(_scrollT); _scrollT = setTimeout(salvarScroll, 200); }, {passive: true});
+
+/* =========================================================
+   INICIALIZAÇÃO
+   ========================================================= */
+/** Estado do armazenamento do aparelho (exibido em Ajustes). */
+const armazenamento = {persistente: false, uso: ''};
+let _promptInstalar = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); _promptInstalar = e; if (UI.tab === 'ajustes') render(); });
+/** Bloco de instalação na tela inicial. */
+function instalarHTML(){
+  const instalado = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+  if (instalado) return '';
+  return `<h2 class="secao-titulo">Instalar na tela inicial</h2><section class="cartao"><div class="sub" style="margin:0 0 10px">O app abre como aplicativo, em tela cheia e sem internet.</div>${_promptInstalar ? '<button class="btn pri" data-a="instalar">Instalar app</button>' : '<div class="contagem" style="margin:0">No Chrome, toque nos três pontos e escolha Adicionar à tela inicial.</div>'}</section>`;
+}
+/** Pede ao navegador para não apagar os dados e mede o espaço usado. */
+async function protegerArmazenamento(){
+  try { if (navigator.storage && navigator.storage.persist) armazenamento.persistente = await navigator.storage.persisted() || await navigator.storage.persist(); } catch {}
+  try { if (navigator.storage && navigator.storage.estimate) { const e = await navigator.storage.estimate(); armazenamento.uso = ((e.usage || 0) / 1048576).toLocaleString('pt-BR', {maximumFractionDigits: 1}) + ' MB'; } } catch {}
+}
+/** Primeira abertura: carrega a lista inicial combinada (uma única vez). */
+async function aplicarSemente(){
+  try { if (localStorage.getItem('compras.semente') === '1') return; } catch {}
+  if (typeof SEMENTE === 'undefined') return;
+  for (const p of SEMENTE.produtos) await Dados.gravarProduto(Object.assign({}, p, {criadoEm: Date.now(), atualizadoEm: Date.now()}));
+  const c = Object.assign({}, SEMENTE.compra, {criadaEm: Date.now()}); Dados.compras.set(c.id, c); await BD.gravar('compras', c.id, c);
+  Dados.salvarCfg(x => { for (const m of SEMENTE.mercados) if (!x.mercados.includes(m)) x.mercados.push(m); });
+  try { localStorage.setItem('compras.semente', '1'); } catch {}
+}
+/** Registra o service worker e avisa quando houver versão nova. */
+function registrarSW(){
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    const avisar = w => toast('Nova versão disponível', {rotulo: 'Atualizar', fn: () => w.postMessage('atualizar')}, 15000);
+    if (reg.waiting && navigator.serviceWorker.controller) avisar(reg.waiting);
+    reg.addEventListener('updatefound', () => { const w = reg.installing; w && w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) avisar(w); }); });
+  }).catch(() => {});
+  let recarregou = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (recarregou) return; recarregou = true; location.reload(); });
+}
+async function iniciar(){
+  carregarUI();
+  $('#versao').textContent = VERSAO;
+  try {
+    const r = await Dados.iniciar();
+    if (r.vazio) await aplicarSemente();
+  } catch {
+    $('#view').innerHTML = '<div class="vazio"><strong>Não foi possível abrir o banco do aparelho</strong>Feche e abra o app de novo. Se continuar, verifique se o Chrome não está em modo anônimo.</div>';
+    return;
+  }
+  render();
+  requestAnimationFrame(() => window.scrollTo(0, lerScroll()));
+  registrarSW();
+  protegerArmazenamento().then(() => { if (UI.tab === 'ajustes') render(); });
+}
+iniciar();
+</script>
+</body>
+</html>
