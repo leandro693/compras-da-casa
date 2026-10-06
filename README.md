@@ -7,4 +7,4 @@ App pessoal de lista de compras (PWA): lista com total em tempo real, lugar de c
 - Bibliotecas em `lib/` (com as licenças): ZXing, jsPDF, jsPDF-AutoTable, SheetJS e SDK da Anthropic.
 - Leitura automática do produto: pelo código de barras, na base aberta Open Food Facts (sem chave); pela foto, com o Gemini ou o Claude (à escolha). As chaves são digitadas em Ajustes e ficam só no aparelho; nunca vão para este repositório nem para o backup.
 
-Versão atual: v2.2.0 (B2).
+Versão atual: v2.3.0 (B2).

@@ -113,6 +113,13 @@ main{padding:0 16px calc(110px + env(safe-area-inset-bottom,0px));max-width:680p
 .nome{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta{font-size:13px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
 .valor{flex:none;text-align:right;font-weight:600;white-space:nowrap}
+.nome-linha{display:flex;align-items:center;gap:6px;min-width:0}
+.nome-linha .nome{min-width:0}
+.qtd-selo{flex:none;font-size:13px;font-weight:700;color:var(--primary);background:var(--primary-soft);border-radius:999px;padding:1px 8px;white-space:nowrap}
+.qtd-selo.sem{color:var(--muted);background:var(--surface-2);font-weight:600}
+.qtd-mini{flex:none;display:flex;align-items:center;gap:4px}
+.qtd-mini button{width:36px;height:36px;border-radius:10px;border:1.5px solid var(--primary-line);background:var(--primary-soft);color:var(--primary);font-size:20px;font-weight:600;line-height:1;padding:0}
+.qtd-mini span{min-width:50px;text-align:center;font-weight:700;font-size:14px;white-space:nowrap}
 .valor.est{color:var(--muted);font-weight:500}
 .badge{font-size:12px;border-radius:6px;padding:1px 6px;background:var(--surface-2);color:var(--muted)}
 .badge.alerta{background:var(--danger-soft);color:var(--danger)}
@@ -962,7 +969,7 @@ const SEMENTE = {
 /* =========================================================
    CONSTANTES
    ========================================================= */
-const VERSAO = 'v2.2.0';
+const VERSAO = 'v2.3.0';
 // bibliotecas guardadas no próprio repositório (funcionam sem internet)
 const URL_ZXING = 'lib/zxing.min.js';
 const URL_JSPDF = 'lib/jspdf.umd.min.js';
@@ -1637,6 +1644,20 @@ function addNaLista(pid, qtd, extra = {}){
   c.itens.push({pid, nome: p.nome, marca: p.marca || '', categoriaId: catDoProduto(p), unidade: p.unidade || 'un', qtd: qtd === undefined ? 1 : qtd, preco: null, comprado: false, obs: extra.obs || null, sugestao: extra.sugestao || null});
   Dados.salvarCompra(c); return true;
 }
+/** Passo do ajuste de quantidade (kg anda de 0,1 em 0,1). */
+const passoQtd = un => un === 'kg' ? 0.1 : 1;
+/** Soma ou tira um passo da quantidade a comprar de um item da lista (mínimo de um passo). */
+function ajustarQtdLista(pid, sinal){
+  const c = editarCompraAberta(); const it = c.itens.find(i => i.pid === pid); if (!it) return;
+  const passo = passoQtd(unidadeItem(it));
+  it.qtd = r3(Math.max(passo, (it.qtd > 0 ? it.qtd : 0) + sinal * passo));
+  Dados.salvarCompra(c);
+}
+/** Seletor − quantidade + de um item que já está na lista. */
+function seletorQtdHTML(it){
+  const nome = esc(nomeItem(it));
+  return `<div class="qtd-mini" role="group" aria-label="Quantidade de ${nome}"><button type="button" data-a="qtd-menos" data-pid="${esc(it.pid)}" aria-label="Diminuir ${nome}">−</button><span>${it.qtd > 0 ? esc(fmtQtd(it.qtd, unidadeItem(it))) : '?'}</span><button type="button" data-a="qtd-mais" data-pid="${esc(it.pid)}" aria-label="Aumentar ${nome}">+</button></div>`;
+}
 
 let IDX = null;
 /** Índice de preços pagos por produto (recalculado a cada mudança). */
@@ -1821,7 +1842,7 @@ function itemHTML(it, c){
   else if (it.obs) meta.push(`<span class="badge">${esc(it.obs)}</span>`);
   else { const marca = p ? [p.marca, p.tamanho].filter(Boolean).join(' ') : it.marca; if (marca) meta.push(`<span>${esc(marca)}</span>`); }
   if (it.comprado) meta.push(`<span>${esc(fmtQtd(it.qtd, un))} × ${fmt(it.preco)}</span>`);
-  else meta.push(`<span>${it.qtd > 0 ? esc(fmtQtd(it.qtd, un)) : 'qtd na hora'}</span>`);
+  const selo = it.comprado ? '' : `<span class="qtd-selo${it.qtd > 0 ? '' : ' sem'}">${it.qtd > 0 ? esc(fmtQtd(it.qtd, un)) : 'qtd na hora'}</span>`;
   if (it.comprado && it.local && c.mercado && it.local !== c.mercado) meta.push(`<span>em ${esc(it.local)}</span>`);
   if (!it.comprado && it.sugestao && it.sugestao !== c.mercado) meta.push(`<span class="badge">${esc(it.sugestao)}</span>`);
   if (al) meta.push(`<span class="badge alerta">${Math.round(al.pct)}% acima da média</span>`);
@@ -1829,7 +1850,7 @@ function itemHTML(it, c){
   return `<div class="item${it.comprado ? ' ok' : ''}">
     <button class="check" data-a="check" data-pid="${esc(it.pid)}" aria-label="${it.comprado ? 'Desmarcar' : 'Marcar como comprado'}: ${esc(nome)}">${svgCheck}</button>
     ${thumbHTML(p, nome)}
-    <button class="info" data-a="item" data-pid="${esc(it.pid)}"><div class="nome">${esc(nome)}</div><div class="meta">${meta.join('')}</div></button>
+    <button class="info" data-a="item" data-pid="${esc(it.pid)}"><div class="nome-linha"><div class="nome">${esc(nome)}</div>${selo}</div><div class="meta">${meta.join('')}</div></button>
     ${valor}
   </div>`;
 }
@@ -1997,13 +2018,14 @@ function abrirItem(pid, focarPreco){
 function abrirAdicionar(){
   let q = '';
   const res = () => {
-    const ab = compraAberta(); const naLista = new Set(((ab && ab.itens) || []).map(i => i.pid));
+    const ab = compraAberta(); const naLista = new Map(((ab && ab.itens) || []).map(i => [i.pid, i]));
     let lista = [...Dados.produtos.values()];
     if (q.trim()) lista = lista.filter(p => casa(textoBusca(p), q));
     lista = ordenarProdutos(lista).slice(0, 80);
     let h = '';
     if (!Dados.produtos.size) h += `<div class="contagem">Nenhum produto cadastrado ainda. Leia o código de barras ou toque em Novo produto.</div>`;
-    h += lista.map(p => `<div class="res-linha">${thumbHTML(p, p.nome)}<div class="info"><div class="nome">${esc(p.nome)}</div><div class="meta"><span>${esc([p.marca, p.tamanho].filter(Boolean).join(' '))}</span><span>${esc(categoria(catDoProduto(p)).nome)}</span></div></div>${naLista.has(p.id) ? '<span class="badge ok">Na lista</span>' : `<button class="mini-add" data-a="add" data-pid="${esc(p.id)}">Adicionar</button>`}</div>`).join('');
+    const lado = p => { const it = naLista.get(p.id); if (!it) return `<button class="mini-add" data-a="add" data-pid="${esc(p.id)}">Adicionar</button>`; return it.comprado ? '<span class="badge ok">No carrinho</span>' : seletorQtdHTML(it); };
+    h += lista.map(p => `<div class="res-linha">${thumbHTML(p, p.nome)}<div class="info"><div class="nome">${esc(p.nome)}</div><div class="meta"><span>${esc([p.marca, p.tamanho].filter(Boolean).join(' '))}</span><span>${esc(categoria(catDoProduto(p)).nome)}</span></div></div>${lado(p)}</div>`).join('');
     if (q.trim()) h += `<div style="margin-top:10px"><button class="btn sec bloco" data-a="novo">Cadastrar “${esc(q.trim())}”</button></div>`;
     return h;
   };
@@ -2014,7 +2036,9 @@ function abrirAdicionar(){
       <div id="addRes" style="margin-top:6px">${res()}</div>`,
     montar(el){ const i = el.querySelector('#buscaAdd'); i.addEventListener('input', () => { q = i.value; el.querySelector('#addRes').innerHTML = res(); }); },
     acoes: {
-      add(b){ const p = Dados.produtos.get(b.dataset.pid); if (addNaLista(b.dataset.pid)) toast((p ? p.nome : 'Produto') + ' adicionado'); const r = b.closest('.sheet').querySelector('#addRes'); setTimeout(() => { r.innerHTML = res(); }, 0); },
+      add(b){ const p = Dados.produtos.get(b.dataset.pid); if (addNaLista(b.dataset.pid)) toast((p ? p.nome : 'Produto') + ' adicionado. Ajuste a quantidade no − +'); const r = b.closest('.sheet').querySelector('#addRes'); setTimeout(() => { r.innerHTML = res(); }, 0); },
+      'qtd-mais'(b){ ajustarQtdLista(b.dataset.pid, 1); const r = b.closest('.sheet').querySelector('#addRes'); setTimeout(() => { r.innerHTML = res(); }, 0); },
+      'qtd-menos'(b){ ajustarQtdLista(b.dataset.pid, -1); const r = b.closest('.sheet').querySelector('#addRes'); setTimeout(() => { r.innerHTML = res(); }, 0); },
       novo(){ abrirProduto(null, {nome: q.trim(), adicionarNaLista: true}); },
       colar(){ abrirColar(); },
       async scan(){ const cod = await lerCodigoAoVivo(); if (cod) tratarCodigoLido(cod, true); },
@@ -2432,7 +2456,8 @@ function abrirColar(){
    TELA: PRODUTOS (catálogo)
    ========================================================= */
 function telaProdutos(){
-  const ab = compraAberta(); const naLista = new Set(((ab && ab.itens) || []).map(i => i.pid));
+  const ab = compraAberta(); const naLista = new Map(((ab && ab.itens) || []).map(i => [i.pid, i]));
+  const naListaHTML = it => `<span class="badge ok">${it.comprado ? 'No carrinho' : 'Na lista · ' + (it.qtd > 0 ? esc(fmtQtd(it.qtd, unidadeItem(it))) : 'qtd na hora')}</span>`;
   let h = `<div class="busca"><input id="buscaProdutos" class="campo" type="search" placeholder="Buscar produto, marca ou categoria" value="${esc(buscaProdutos)}" autocomplete="off" aria-label="Buscar produtos"></div>`;
   h += `<div class="grade-btn" style="margin:6px 0 4px"><button class="btn sec" data-a="scan-produtos">${ICONES.codigo}Ler código</button><button class="btn sec" data-a="digitar-produtos">${ICONES.teclado}Digitar código</button><button class="btn pri" data-a="novo-produto">${ICONES.mais}Novo produto</button></div>`;
   h += `<div class="chips" role="group" aria-label="Filtrar por categoria"><button class="chip" data-a="filtro-prod" data-v="" aria-pressed="${!UI.catProdutos}">Todas</button>${Dados.cfg.categorias.map(c => `<button class="chip" data-a="filtro-prod" data-v="${esc(c.id)}" aria-pressed="${UI.catProdutos === c.id}"><i class="dot" style="background:${esc(c.cor)}"></i>${esc(c.nome)}</button>`).join('')}<button class="chip" data-a="filtro-prod" data-v="_sem" aria-pressed="${UI.catProdutos === '_sem'}">Sem categoria</button></div>`;
@@ -2443,7 +2468,7 @@ function telaProdutos(){
   const grupos = agruparPorCategoria(lista, p => catDoProduto(p));
   h += grupos.map(g => `<section class="grupo"><h3><i class="dot" style="background:${esc(g.cat.cor)}"></i>${esc(g.cat.nome)}</h3><div class="lista">${g.itens.map(p => {
     const ult = ultimoPreco(p.id);
-    return `<div class="item">${thumbHTML(p, p.nome)}<button class="info" data-a="editar-produto" data-pid="${esc(p.id)}"><div class="nome">${esc(p.nome)}</div><div class="meta">${[p.marca, p.tamanho].filter(Boolean).length ? `<span>${esc([p.marca, p.tamanho].filter(Boolean).join(' '))}</span>` : ''}${ult ? `<span>último ${fmt(ult)}${p.unidade === 'kg' ? '/kg' : ''}</span>` : ''}</div></button>${naLista.has(p.id) ? '<span class="badge ok">Na lista</span>' : `<button class="mini-add" data-a="add-lista" data-pid="${esc(p.id)}">+ Lista</button>`}</div>`;
+    return `<div class="item">${thumbHTML(p, p.nome)}<button class="info" data-a="editar-produto" data-pid="${esc(p.id)}"><div class="nome">${esc(p.nome)}</div><div class="meta">${[p.marca, p.tamanho].filter(Boolean).length ? `<span>${esc([p.marca, p.tamanho].filter(Boolean).join(' '))}</span>` : ''}${ult ? `<span>último ${fmt(ult)}${p.unidade === 'kg' ? '/kg' : ''}</span>` : ''}</div></button>${naLista.has(p.id) ? naListaHTML(naLista.get(p.id)) : `<button class="mini-add" data-a="add-lista" data-pid="${esc(p.id)}">+ Lista</button>`}</div>`;
   }).join('')}</div></section>`).join('');
   if (!lista.length) h += `<div class="vazio"><strong>Nada encontrado</strong>${buscaProdutos.trim() ? `<div style="margin-top:12px"><button class="btn sec" data-a="novo-produto-busca-p">Cadastrar “${esc(buscaProdutos.trim())}”</button></div>` : ''}</div>`;
   return h;
