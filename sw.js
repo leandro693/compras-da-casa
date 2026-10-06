@@ -1,9 +1,9 @@
 /* =========================================================
    SERVICE WORKER: app funcionando sem internet e atualização segura
    ========================================================= */
-const VERSAO_CACHE = 'compras-v2.1.0';
+const VERSAO_CACHE = 'compras-v2.2.0';
 const ARQUIVOS = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
-  'lib/zxing.min.js', 'lib/jspdf.umd.min.js', 'lib/jspdf.plugin.autotable.min.js', 'lib/xlsx.full.min.js'];
+  'lib/zxing.min.js', 'lib/jspdf.umd.min.js', 'lib/jspdf.plugin.autotable.min.js', 'lib/xlsx.full.min.js', 'lib/anthropic-sdk.min.js'];
 
 /** Instalação: guarda os arquivos do app. */
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSAO_CACHE).then(c => c.addAll(ARQUIVOS))); });
