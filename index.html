@@ -988,7 +988,7 @@ const SEMENTE = {
 /* =========================================================
    CONSTANTES
    ========================================================= */
-const VERSAO = 'v2.8.0';
+const VERSAO = 'v2.8.1';
 // bibliotecas guardadas no próprio repositório (funcionam sem internet)
 const URL_ZXING = 'lib/zxing.min.js';
 const URL_JSPDF = 'lib/jspdf.umd.min.js';
@@ -1920,7 +1920,7 @@ function abrirConferirNota(dados){
       const nl = naLista();
       const linhas = st.itens.map((l, i) => {
         const p = l.alvo ? Dados.produtos.get(l.alvo) : null; const nome = p ? p.nome : l.nome;
-        const preco = l.qtd > 0 ? l.total / l.qtd : 0;
+        const preco = l.unit > 0 ? l.unit : (l.qtd > 0 ? ((l.total || 0) + (l.desconto || 0)) / l.qtd : 0);
         return `<div class="nota-linha${l.incluir ? ' ok' : ' fora'}"><button class="check" data-a="nota-incluir" data-i="${i}" aria-label="${l.incluir ? 'Não incluir' : 'Incluir'}: ${esc(nome)}">${svgCheck}</button>
           <button class="info" data-a="nota-item" data-i="${i}"><div class="nome-linha"><div class="nome">${esc(nome)}</div>${p ? '<span class="badge ok">Cadastrado</span>' : '<span class="badge">Novo</span>'}</div><div class="meta"><span>${esc(l.descricao)}</span><span>${esc(fmtQtd(l.qtd, l.unidade))} × ${fmt(preco)}</span>${l.desconto > 0 ? `<span class="badge alerta">− ${fmt(l.desconto)} desconto</span>` : ''}</div></button>
           <div class="valor">${fmt(l.total)}</div></div>`;
@@ -1968,7 +1968,8 @@ function abrirItemNota(l){
   let q = '';
   const resHTML = () => (q.trim() ? ordenarProdutos([...Dados.produtos.values()].filter(x => casa(textoBusca(x), q))).slice(0, 6) : [])
     .map(x => `<div class="res-linha">${thumbHTML(x, x.nome)}<div class="info"><div class="nome">${esc(x.nome)}</div><div class="meta"><span>${esc([x.marca, x.tamanho].filter(Boolean).join(' '))}</span></div></div><button class="mini-add" data-a="ni-ligar" data-pid="${esc(x.id)}">Ligar</button></div>`).join('');
-  const precoHTML = () => `Preço ${l.unidade === 'kg' ? 'por kg' : 'unitário'}: ${fmt(l.qtd > 0 ? l.total / l.qtd : 0)}${l.desconto > 0 ? ` · desconto do item na nota: ${fmt(l.desconto)}` : ''}`;
+  let preco = l.unit > 0 ? l.unit : (l.qtd > 0 ? r2(((l.total || 0) + (l.desconto || 0)) / l.qtd) : 0);
+  const precoHTML = () => l.desconto > 0 ? `Desconto do item na nota: ${fmt(l.desconto)} (já descontado do total).` : 'Mude quantidade, preço ou total: o outro valor se ajusta.';
   const s = {
     titulo: 'Item da nota',
     html(){
@@ -1979,7 +1980,7 @@ function abrirItemNota(l){
           : `<label class="rot" for="niNome">Nome (produto novo)</label><input id="niNome" class="campo" data-l="nome" value="${esc(l.nome)}" maxlength="60" autocomplete="off">
             <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:10px"><div><label class="rot" for="niMarca">Marca</label><input id="niMarca" class="campo" data-l="marca" value="${esc(l.marca)}" maxlength="40" autocomplete="off"></div><div><label class="rot" for="niTam">Tamanho</label><input id="niTam" class="campo" data-l="tamanho" value="${esc(l.tamanho)}" maxlength="20" autocomplete="off"></div></div>`}
         <span class="rot">Vendido por</span><div class="seg" role="group"><button type="button" data-a="ni-un" data-v="un" aria-pressed="${l.unidade !== 'kg'}">Unidade</button><button type="button" data-a="ni-un" data-v="kg" aria-pressed="${l.unidade === 'kg'}">Peso (kg)</button></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label class="rot" for="niQtd">Quantidade${l.unidade === 'kg' ? ' (kg)' : ''}</label><input id="niQtd" class="campo" inputmode="decimal" data-l="qtd" value="${esc(String(l.qtd).replace('.', ','))}" autocomplete="off"></div><div><label class="rot" for="niTotal">Total pago (R$)</label><input id="niTotal" class="campo" inputmode="decimal" data-l="total" value="${esc(fmtNum2(l.total))}" autocomplete="off"></div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"><div><label class="rot" for="niQtd">Qtd${l.unidade === 'kg' ? ' (kg)' : ''}</label><input id="niQtd" class="campo" inputmode="decimal" data-l="qtd" value="${esc(String(l.qtd).replace('.', ','))}" autocomplete="off"></div><div><label class="rot" for="niUnit">${l.unidade === 'kg' ? 'Preço/kg' : 'Preço un.'}</label><input id="niUnit" class="campo" inputmode="decimal" data-l="unit" value="${preco > 0 ? esc(fmtNum2(preco)) : ''}" autocomplete="off"></div><div><label class="rot" for="niTotal">Total pago</label><input id="niTotal" class="campo" inputmode="decimal" data-l="total" value="${esc(fmtNum2(l.total))}" autocomplete="off"></div></div>
         <div class="contagem" id="niPreco">${precoHTML()}</div>
         <label class="rot" for="niBusca">${p ? 'Trocar por outro produto cadastrado' : 'Ou ligar a um produto cadastrado'}</label><input id="niBusca" class="campo" type="search" value="${esc(q)}" placeholder="Buscar no catálogo" autocomplete="off">
         <div id="niRes">${resHTML()}</div>
@@ -1989,7 +1990,13 @@ function abrirItemNota(l){
     montar(el){
       el.querySelectorAll('[data-l]').forEach(i => i.addEventListener('input', () => {
         const k = i.dataset.l;
-        if (k === 'qtd' || k === 'total') { const n = parseNum(i.value); l[k] = Number.isFinite(n) && n >= 0 ? (k === 'qtd' ? r3(n) : r2(n)) : 0; el.querySelector('#niPreco').textContent = precoHTML(); }
+        if (k === 'qtd' || k === 'total' || k === 'unit') {
+          const n = parseNum(i.value), v = Number.isFinite(n) && n >= 0 ? n : 0, desc = l.desconto || 0;
+          if (k === 'qtd') l.qtd = r3(v); else if (k === 'unit') preco = r3(v); else l.total = r2(v);
+          if (k === 'total') { preco = l.qtd > 0 ? r2((l.total + desc) / l.qtd) : 0; el.querySelector('#niUnit').value = preco > 0 ? fmtNum2(preco) : ''; }
+          else if (preco > 0) { l.total = Math.max(0, r2(l.qtd * preco - desc)); el.querySelector('#niTotal').value = fmtNum2(l.total); }
+          l.unit = preco > 0 ? preco : null; l.bruto = r2(l.qtd * preco);
+        }
         else l[k] = i.value;
       }));
       const b = el.querySelector('#niBusca'); b.addEventListener('input', () => { q = b.value; el.querySelector('#niRes').innerHTML = resHTML(); });
