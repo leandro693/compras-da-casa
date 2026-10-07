@@ -989,7 +989,7 @@ const SEMENTE = {
 /* =========================================================
    CONSTANTES
    ========================================================= */
-const VERSAO = 'v2.10.0';
+const VERSAO = 'v2.10.1';
 // bibliotecas guardadas no próprio repositório (funcionam sem internet)
 const URL_ZXING = 'lib/zxing.min.js';
 const URL_JSPDF = 'lib/jspdf.umd.min.js';
@@ -2114,10 +2114,11 @@ async function salvarNota(st){
   if (!Dados.cfg.mercados.includes(lugar)) Dados.salvarCfg(x => { x.mercados.push(lugar); x.mercados.sort((a, b) => a.localeCompare(b, 'pt-BR')); });
   if (st.cnpj && (Dados.cfg.lojas || {})[st.cnpj] !== lugar) Dados.salvarCfg(x => { x.lojas = Object.assign({}, x.lojas, {[st.cnpj]: lugar}); });
   st.lancada = true; await apagarRascunhoNota();
-  fecharTodasSheets(); render();
-  toast(`Compra lançada: ${itens.length} ${itens.length === 1 ? 'item' : 'itens'}, ${fmt(total)} em ${lugar}` + (novos.size ? `. ${novos.size} ${novos.size === 1 ? 'produto cadastrado' : 'produtos cadastrados'}` : '')
-    + (tirados.length ? `. ${tirados.length} ${tirados.length === 1 ? 'saiu' : 'saíram'} da lista` : '') + (semFotos ? '. Sem espaço para as fotos: a nota foi guardada sem elas' : ''), null, 7000);
-  abrirCompra(compraId);
+  // deu certo: volta para o Início; o detalhe fica a um toque ("Ver compra")
+  fecharTodasSheets(); salvarScroll(); UI.tab = 'inicio'; salvarUI(); render(); window.scrollTo(0, 0);
+  toast(`Nota lançada com sucesso: ${itens.length} ${itens.length === 1 ? 'item' : 'itens'}, ${fmt(total)} em ${lugar}` + (novos.size ? `. ${novos.size} ${novos.size === 1 ? 'produto cadastrado' : 'produtos cadastrados'}` : '')
+    + (tirados.length ? `. ${tirados.length} ${tirados.length === 1 ? 'saiu' : 'saíram'} da lista` : '') + (semFotos ? '. Sem espaço para as fotos: a nota foi guardada sem elas' : ''),
+    {rotulo: 'Ver compra', fn: () => abrirCompra(compraId)}, 8000);
 }
 /** Chave de acesso em grupos de 4 dígitos. */
 const fmtChave = s => String(s || '').replace(/(\d{4})(?=\d)/g, '$1 ');
