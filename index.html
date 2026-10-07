@@ -989,7 +989,7 @@ const SEMENTE = {
 /* =========================================================
    CONSTANTES
    ========================================================= */
-const VERSAO = 'v2.10.1';
+const VERSAO = 'v2.10.2';
 // bibliotecas guardadas no próprio repositório (funcionam sem internet)
 const URL_ZXING = 'lib/zxing.min.js';
 const URL_JSPDF = 'lib/jspdf.umd.min.js';
@@ -1764,7 +1764,7 @@ function pedidoNota(cats){
     + '"itens" (lista com uma entrada por linha de produto da nota, sem repetir linhas que aparecem em duas fotos). Cada item tem: '
     + '"numero" (número do item impresso na nota, ou vazio), "codigo" (código do produto como impresso, só dígitos, ou vazio), "descricao" (texto do produto como impresso), '
     + '"quantidade" (número), "unidade" ("kg" se vendido por peso, senão "un"), "preco_unitario" (número), '
-    + '"total_bruto" (quantidade vezes preço unitário, antes do desconto, número), "desconto" (desconto deste item, número positivo, quando a nota mostra um desconto logo abaixo dele; senão 0), '
+    + '"total_bruto" (valor impresso na linha do item, antes de qualquer desconto, copiado da nota sem calcular, número), "desconto" (desconto deste item, número positivo, quando a nota mostra um desconto logo abaixo dele; senão 0), '
     + '"total" (valor do item depois do desconto do item, número), '
     + '"nome" (tipo do produto e variação por extenso, em português, sem a marca, até 60 caracteres, ex.: "Leite condensado integral"), "marca" (ou vazio), '
     + '"tamanho" (conteúdo da embalagem com a unidade, ex.: "395 g", "1 L", ou vazio), "categoria" (exatamente um destes nomes: ' + JSON.stringify(cats) + ', ou vazio). '
@@ -1794,16 +1794,25 @@ async function lerNotaComIA(arquivos, provedor = IA.atual()){
     const numero = Number.isInteger(parseNum(x.numero)) && parseNum(x.numero) > 0 ? parseNum(x.numero) : null;
     if (numero !== null) { if (vistos.has(numero)) continue; vistos.add(numero); }
     let qtd = parseNum(x.quantidade); const unit = parseNum(x.preco_unitario); let total = parseNum(x.total);
-    let bruto = parseNum(x.total_bruto); const desc = parseNum(x.desconto) > 0 ? parseNum(x.desconto) : 0;
+    let bruto = parseNum(x.total_bruto); let desc = parseNum(x.desconto) > 0 ? parseNum(x.desconto) : 0;
+    let kg = String(x.unidade || '').toLowerCase() === 'kg'; const confira = [];
     if (!(qtd > 0)) qtd = unit > 0 && (bruto > 0 || total > 0) ? (bruto > 0 ? bruto : total) / unit : 1;
+    // quantidade × preço tem que dar o valor impresso na linha; se não der, a quantidade sai da própria nota (ex.: peso)
+    if (unit > 0 && bruto > 0 && Math.abs(unit * qtd - bruto) > 0.02) {
+      const q = bruto / unit; confira.push(`a IA leu quantidade ${String(r3(qtd)).replace('.', ',')}; pela nota é ${String(r3(q)).replace('.', ',')} (${fmt(bruto)} ÷ ${fmt(unit)})`);
+      qtd = q; if (Math.abs(q - Math.round(q)) > 0.001) kg = true;
+    }
     if (!(bruto > 0)) bruto = unit > 0 ? unit * qtd : (total > 0 ? total + desc : 0);
     if (!(total > 0)) total = bruto > 0 ? bruto - desc : 0;
+    // linha maior que o total pago e nenhum desconto informado: a diferença é desconto do item
+    if (!(desc > 0) && bruto > 0 && total > 0 && bruto - total > 0.009) { desc = bruto - total; confira.push(`desconto de ${fmt(desc)} calculado pela diferença entre a linha (${fmt(bruto)}) e o total (${fmt(total)})`); }
+    if (unit > 0 && total > 0 && Math.abs(unit * qtd - desc - total) > 0.02) confira.push(`os valores não fecham: ${String(r3(qtd)).replace('.', ',')} × ${fmt(unit)}${desc > 0 ? ' − ' + fmt(desc) : ''} ≠ ${fmt(total)}`);
     const descricao = textoExterno(x.descricao, 80, 'nota');
     const nome = textoExterno(x.nome, 60, 'nota') || capitalizar(descricao.toLowerCase()).slice(0, 60);
     if (!nome) continue;
     const cod = String(x.codigo || '').replace(/\D/g, '');
     const cat = Dados.cfg.categorias.find(c => norm(c.nome) === norm(textoExterno(x.categoria, 30, 'nota')));
-    itens.push({numero, descricao, unit: unit > 0 ? r2(unit) : null, ean: /^\d{8}$|^\d{12,14}$/.test(cod) && gtinValido(cod) ? cod : '', qtd: r3(qtd), unidade: String(x.unidade || '').toLowerCase() === 'kg' ? 'kg' : 'un',
+    itens.push({numero, descricao, unit: unit > 0 ? r2(unit) : null, ean: /^\d{8}$|^\d{12,14}$/.test(cod) && gtinValido(cod) ? cod : '', qtd: r3(qtd), unidade: kg ? 'kg' : 'un', confira: confira.join('; '),
       bruto: bruto > 0 ? r2(bruto) : 0, desconto: r2(desc), total: total > 0 ? r2(total) : 0, nome: capitalizar(nome), marca: textoExterno(x.marca, 40, 'nota'), tamanho: textoExterno(x.tamanho, 20, 'nota'), categoriaId: cat ? cat.id : null});
   }
   if (!itens.length) throw new ErroIA('Não deu para ler os itens desta nota. Tente fotos mais próximas, retas e com boa luz.', 'formato', provedor);
@@ -1946,7 +1955,7 @@ function abrirConferenciaComEstado(st){
         const p = l.alvo ? Dados.produtos.get(l.alvo) : null; const nome = p ? p.nome : l.nome;
         const preco = l.unit > 0 ? l.unit : (l.qtd > 0 ? ((l.total || 0) + (l.desconto || 0)) / l.qtd : 0);
         return `<div class="nota-linha${l.incluir ? ' ok' : ' fora'}"><button class="check" data-a="nota-incluir" data-i="${i}" aria-label="${l.incluir ? 'Não incluir' : 'Incluir'}: ${esc(nome)}">${svgCheck}</button>
-          <button class="info" data-a="nota-item" data-i="${i}"><div class="nome-linha"><div class="nome">${esc(nome)}</div>${p ? '<span class="badge ok">Cadastrado</span>' : '<span class="badge">Novo</span>'}</div><div class="meta"><span>${esc(l.descricao)}</span><span>${esc(fmtQtd(l.qtd, l.unidade))} × ${fmt(preco)}</span>${l.desconto > 0 ? `<span class="badge alerta">− ${fmt(l.desconto)} desconto</span>` : ''}</div></button>
+          <button class="info" data-a="nota-item" data-i="${i}"><div class="nome-linha"><div class="nome">${esc(nome)}</div>${l.confira ? '<span class="badge alerta">Confira</span>' : p ? '<span class="badge ok">Cadastrado</span>' : '<span class="badge">Novo</span>'}</div><div class="meta"><span>${esc(l.descricao)}</span><span>${esc(fmtQtd(l.qtd, l.unidade))} × ${fmt(preco)}</span>${l.desconto > 0 ? `<span class="badge alerta">− ${fmt(l.desconto)} desconto</span>` : ''}</div></button>
           <div class="valor">${fmt(l.total)}</div></div>`;
       }).join('');
       return `${st.avisos.map(a => `<div class="aviso" style="margin-top:0;margin-bottom:10px">${esc(a)}</div>`).join('')}
@@ -2003,6 +2012,7 @@ function abrirItemNota(l, aoMudar){
     html(){
       const p = l.alvo ? Dados.produtos.get(l.alvo) : null;
       return `<div class="aviso" style="margin-top:0">Na nota: ${esc(l.descricao || '—')}${l.ean ? ' · código ' + esc(l.ean) : ''}</div>
+        ${l.confira ? `<div class="aviso perigo">Confira: ${esc(l.confira)}. Se não for isso, corrija quantidade, preço ou total abaixo.</div>` : ''}
         ${p ? `<span class="rot">Produto cadastrado</span><div class="cab-prod">${thumbHTML(p, p.nome)}<div><div class="nome">${esc(p.nome)}</div><div class="meta">${esc([p.marca, p.tamanho].filter(Boolean).join(' ') || 'Sem marca no cadastro')}</div></div></div>
             <button class="btn sec bloco" style="margin-top:8px" data-a="ni-novo">Não é este: cadastrar como novo</button>`
           : `<label class="rot" for="niNome">Nome (produto novo)</label><input id="niNome" class="campo" data-l="nome" value="${esc(l.nome)}" maxlength="60" autocomplete="off">
@@ -2038,7 +2048,7 @@ function abrirItemNota(l, aoMudar){
       'ni-pronto'(){
         if (!(l.qtd > 0)) return toast('Informe a quantidade.');
         if (!l.alvo && !String(l.nome || '').trim()) return toast('Informe o nome do produto.');
-        l.incluir = true; fecharSheet();
+        l.incluir = true; l.confira = ''; fecharSheet();
       },
     },
   };
