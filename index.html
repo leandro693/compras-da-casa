@@ -991,7 +991,7 @@ const SEMENTE = {
 /* =========================================================
    CONSTANTES
    ========================================================= */
-const VERSAO = 'v2.11.0';
+const VERSAO = 'v2.12.0';
 // bibliotecas guardadas no próprio repositório (funcionam sem internet)
 const URL_ZXING = 'lib/zxing.min.js';
 const URL_JSPDF = 'lib/jspdf.umd.min.js';
@@ -2111,7 +2111,7 @@ async function salvarNota(st){
     subtotal: k.bruto, descontoItens: k.descItens, descontoGeral: k.geral, fotos: (st.imagens || []).map(b => 'data:image/jpeg;base64,' + b),
     itens: linhas.map(l => ({numero: l.numero, descricao: l.descricao, pid: pidDaLinha.get(l), qtd: l.qtd, unidade: l.unidade, bruto: r2(l.total + (l.desconto || 0)), desconto: l.desconto || 0, total: pago.get(l)})),
     criados: [...novos.values()].map(p => p.id), naListaAntes: [], tiradosDaLista: tirados, criadaEm: Date.now()};
-  let semFotos = false;
+  let semFotos = false; esquecerLinhasNotas();
   try { await BD.gravar('notas', notaId, nota); }
   catch { try { await BD.gravar('notas', notaId, Object.assign({}, nota, {fotos: []})); semFotos = true; } catch (e) { return falhaGravacao(e); } }
   // a compra vai direto para o histórico, com a data da nota
@@ -2232,6 +2232,7 @@ async function excluirNotas(ids, apagarProdutos){
     Dados.salvarCompra(c);
   }
   for (const id of ids) await BD.apagar('notas', id).catch(() => {});
+  esquecerLinhasNotas();
   let produtos = 0;
   if (apagarProdutos) {
     const usados = new Set();
@@ -2620,6 +2621,172 @@ function render(){
 }
 
 /* =========================================================
+   BUSCA GLOBAL E HISTÓRICO DE PREÇOS (produtos, compras e linhas das notas)
+   ========================================================= */
+let buscaInicio = '';
+/** Linhas das notas guardadas, só o texto (sem fotos): por produto e por nota+produto. null = ainda não carregado. */
+let _linhasNotas = null, _carregandoNotas = null;
+function carregarLinhasNotas(){
+  if (_linhasNotas) return Promise.resolve(_linhasNotas);
+  if (!_carregandoNotas) _carregandoNotas = BD.todos('notas').catch(() => []).then(notas => {
+    const porPid = new Map(), porNotaPid = new Map();
+    for (const n of notas) for (const i of n.itens || []) {
+      if (!i || typeof i.pid !== 'string') continue;
+      const d = String(i.descricao || '').slice(0, 80);
+      if (!porPid.has(i.pid)) porPid.set(i.pid, []); porPid.get(i.pid).push(norm(d));
+      porNotaPid.set(n.id + '|' + i.pid, d);
+    }
+    _linhasNotas = {porPid, porNotaPid}; _carregandoNotas = null; return _linhasNotas;
+  });
+  return _carregandoNotas;
+}
+/** Chamado quando notas são lançadas, excluídas ou restauradas: a próxima busca relê o banco. */
+const esquecerLinhasNotas = () => { _linhasNotas = null; };
+
+/** Pontua o texto (já normalizado) para a busca: cada palavra digitada precisa achar uma palavra do texto
+    (contida nela, ou com 1 letra de diferença em palavras de 5 a 7 letras, 2 em palavras de 8 ou mais). 0 = não acha. */
+function pontuarBusca(texto, q){
+  const palavras = String(texto).split(/[^a-z0-9]+/).filter(Boolean);
+  const termos = norm(q).split(/[^a-z0-9]+/).filter(Boolean); if (!termos.length) return 0;
+  let total = 0;
+  for (const t of termos) {
+    let melhor = 0;
+    for (const w of palavras) {
+      if (w.startsWith(t)) { melhor = 3; break; }
+      if (w.includes(t)) { melhor = Math.max(melhor, 2); continue; }
+      if (t.length >= 5 && melhor < 1) {
+        const tol = t.length >= 8 ? 2 : 1;
+        if (distancia(t, w) <= tol || (w.length > t.length && distancia(t, w.slice(0, t.length)) <= tol)) melhor = 1;
+      }
+    }
+    if (!melhor) return 0;
+    total += melhor;
+  }
+  return total;
+}
+/** Resultados agrupados por produto (inclui itens de produtos já excluídos), melhores primeiro. */
+function buscaGlobal(q){
+  const grupos = new Map();
+  const somar = (pid, nome, texto) => { const sc = pontuarBusca(texto, q); if (!sc) return; const g = grupos.get(pid); if (!g || sc > g.score) grupos.set(pid, {pid, nome, score: sc}); };
+  for (const p of Dados.produtos.values()) somar(p.id, p.nome, textoBusca(p) + ' ' + ((_linhasNotas && _linhasNotas.porPid.get(p.id)) || []).join(' '));
+  for (const c of Dados.compras.values()) for (const it of c.itens || []) {
+    const p = Dados.produtos.get(it.pid);
+    somar(it.pid, p ? p.nome : String(it.nome || 'Produto excluído'), norm(it.nome));
+  }
+  // empate: o comprado mais recentemente primeiro (quem nunca foi comprado vai para o fim)
+  const ultima = pid => { const h = indice().hist.get(pid); return h && h.length ? h[h.length - 1].data : 0; };
+  return [...grupos.values()].sort((a, b) => b.score - a.score || ultima(b.pid) - ultima(a.pid) || a.nome.localeCompare(b.nome, 'pt-BR')).slice(0, 40);
+}
+
+/** Tamanho da embalagem lido de um texto da nota: "C/52", "PCT 52", "52UN", "52 UNID" → unidades; "1KG", "500G", "2L" → kg ou litro. */
+function lerEmbalagem(texto){
+  const t = ' ' + String(texto || '').toUpperCase().replace(/\s+/g, ' ').slice(0, 120) + ' ';
+  let m = t.match(/[\s(]C\s?\/\s?(\d{1,4})(?!\d)/) || t.match(/\b(?:PCT|PACOTE|PACK|CX|CAIXA|FD|FARDO)\s?(?:C\s?\/\s?)?(\d{1,4})(?!\d)/) || t.match(/\b(\d{1,4})\s?(?:UN|UND|UNID|UNIDS|UNIDADE|UNIDADES|ROLOS)\b/);
+  if (m) { const q = Number(m[1]); if (q >= 2 && q <= 5000) return {qtd: q, un: 'un'}; }
+  m = t.match(/\b(\d{1,4}(?:[.,]\d{1,3})?)\s?(KG|G|GR|GRS|ML|L|LT|LTS)\b/);
+  if (m) {
+    const v = parseNum(m[1]); if (!(v > 0)) return null;
+    if (m[2] === 'KG') return {qtd: r3(v), un: 'kg'};
+    if (/^G/.test(m[2])) return {qtd: r3(v / 1000), un: 'kg'};
+    if (m[2] === 'ML') return {qtd: r3(v / 1000), un: 'L'};
+    return {qtd: r3(v), un: 'L'};
+  }
+  return null;
+}
+const EMB_ROTULO = {un: 'unidades', kg: 'kg', L: 'litros'};
+const embTexto = e => e ? `${String(e.qtd).replace('.', ',')} ${e.un === 'un' ? (e.qtd === 1 ? 'unidade' : 'unidades') : e.un === 'kg' ? 'kg' : (e.qtd === 1 ? 'litro' : 'litros')}` : '';
+/** Embalagem de uma compra: a lida na nota daquela compra; senão a do cadastro do produto. */
+function embalagemDaCompra(pid, x){
+  const c = Dados.compras.get(x.compraId); const it = c && (c.itens || []).find(i => i.pid === pid);
+  const desc = it && it.notaId && _linhasNotas ? _linhasNotas.porNotaPid.get(it.notaId + '|' + pid) : null;
+  const daNota = desc ? lerEmbalagem(desc) : null; if (daNota) return Object.assign({origem: 'nota'}, daNota);
+  const p = Dados.produtos.get(pid); return p && p.embalagem && p.embalagem.qtd > 0 ? Object.assign({origem: 'produto'}, p.embalagem) : null;
+}
+/** Preço por unidade (ou por kg/litro) de uma compra; null se não souber a embalagem ou se o produto é vendido por peso. */
+function precoUnitario(pid, x){
+  const p = Dados.produtos.get(pid); if (p && p.unidade === 'kg') return null;
+  const e = embalagemDaCompra(pid, x); if (!e || !(e.qtd > 0)) return null;
+  return {valor: x.preco / e.qtd, un: e.un, emb: e};
+}
+/** Preço por unidade: 2 casas (R$ 0,96); 4 casas só abaixo de R$ 0,10. */
+const fmtPorUn = v => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: v < 0.1 ? 4 : 2});
+const porUnTexto = u => u ? `${fmtPorUn(u.valor)} ${u.un === 'kg' ? 'por kg' : u.un === 'L' ? 'por litro' : 'por unidade'}` : '';
+/** Versão curta para quadros estreitos: "R$ 1,32/un". */
+const porUnCurto = u => u ? `${fmtPorUn(u.valor)}/${u.un === 'kg' ? 'kg' : u.un === 'L' ? 'L' : 'un'}` : '';
+/** Compras do produto da mais recente para a mais antiga, com o preço por unidade. */
+function comprasDoProduto(pid){
+  return [...(indice().hist.get(pid) || [])].reverse().map(x => Object.assign({}, x, {un: precoUnitario(pid, x)}));
+}
+/** Nome do produto mesmo se já excluído (pega o nome guardado no item da compra). */
+function nomeDoPid(pid){ const p = Dados.produtos.get(pid); if (p) return p.nome; for (const c of Dados.compras.values()) { const it = (c.itens || []).find(i => i.pid === pid); if (it) return it.nome; } return 'Produto'; }
+
+/** Busca no topo do Início: com texto, mostra os resultados no lugar do painel. */
+function buscaInicioHTML(){
+  const campo = `<div class="busca"><input id="buscaInicio" class="campo" type="search" placeholder="Buscar: fralda, hipoglós, café…" value="${esc(buscaInicio)}" autocomplete="off" enterkeyhint="search" aria-label="Buscar produto, compras e notas"></div>`;
+  const q = buscaInicio.trim(); if (!q) return {campo, resultados: ''};
+  if (!_linhasNotas) carregarLinhasNotas().then(() => { if (UI.tab === 'inicio' && buscaInicio.trim()) render(); });
+  const res = buscaGlobal(q);
+  if (!res.length) return {campo, resultados: `<div class="vazio"><strong>Nada encontrado para “${esc(q)}”</strong>Tente uma parte do nome, como “fral” ou “hipo”.</div>`};
+  const linha = g => {
+    const cs = comprasDoProduto(g.pid), u = cs[0], p = Dados.produtos.get(g.pid);
+    const meta = u ? `<span>Última: <b>${fmt(u.preco)}</b>${u.un ? ` · ${esc(porUnTexto(u.un))}` : ''}</span><span>${esc(u.mercado || 'sem lugar')}, ${fmtData(u.data)}</span><span>${cs.length} ${cs.length === 1 ? 'compra' : 'compras'}</span>` : '<span>Nunca comprado</span>';
+    return `<button class="res-linha" data-a="historico" data-pid="${esc(g.pid)}" style="width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left">${p ? thumbHTML(p, p.nome) : thumbHTML(null, g.nome)}<div class="info"><div class="nome">${esc(g.nome)}${p ? '' : ' <span class="badge">excluído</span>'}</div><div class="meta">${meta}</div></div></button>`;
+  };
+  return {campo, resultados: `<section class="cartao"><h2>${res.length} ${res.length === 1 ? 'produto' : 'produtos'}${_linhasNotas ? '' : ' (lendo as notas…)'}</h2>${res.map(linha).join('')}</section>`};
+}
+
+/** FOLHA: histórico de preços de um produto, com preço por unidade, embalagem e compartilhar. */
+async function abrirHistoricoProduto(pid){
+  await carregarLinhasNotas();
+  const s = {
+    titulo: 'Histórico de preços',
+    html(){
+      const p = Dados.produtos.get(pid), nome = nomeDoPid(pid), cs = comprasDoProduto(pid);
+      const u = cs[0];
+      // menor preço: por unidade quando todas as compras têm, senão pelo preço pago
+      const todosUn = cs.length && cs.every(x => x.un), valor = x => todosUn ? x.un.valor : x.preco;
+      const menor = cs.length ? cs.reduce((a, b) => valor(b) < valor(a) ? b : a) : null;
+      const media = cs.length ? cs.reduce((t, x) => t + valor(x), 0) / cs.length : 0;
+      // sugestão de embalagem lida na nota mais recente, se o cadastro ainda não tem
+      const sug = p && p.unidade !== 'kg' && !(p.embalagem && p.embalagem.qtd > 0) ? (cs.map(x => embalagemDaCompra(pid, x)).find(e => e && e.origem === 'nota') || lerEmbalagem(p.tamanho)) : null;
+      const emb = p && p.embalagem && p.embalagem.qtd > 0 ? p.embalagem : null;
+      const linhas = cs.slice(0, 30).map(x => `<button class="compra-linha" data-a="hist-compra" data-id="${esc(x.compraId)}"><span><b>${fmtData(x.data)}</b><small>${esc(x.mercado || 'sem lugar')} · ${esc(fmtQtd(x.qtd, p ? p.unidade : 'un'))}${x.finalizada ? '' : ' · no carrinho'}</small></span><span style="text-align:right"><b>${fmt(x.preco)}</b>${x.un ? `<small>${esc(porUnTexto(x.un))}${x.un.emb.origem === 'nota' ? ` · ${esc(embTexto(x.un.emb))} na nota` : ''}</small>` : ''}</span></button>`).join('');
+      return `<div class="cab-prod">${thumbHTML(p, nome)}<div><div class="nome" style="white-space:normal">${esc(nome)}</div><div class="meta">${esc(p ? [p.marca, p.tamanho].filter(Boolean).join(' ') || categoria(catDoProduto(p)).nome : 'Produto excluído do catálogo')}</div></div></div>
+        ${u ? `<div class="resumo-item" style="grid-template-columns:minmax(118px,auto) 1fr"><span>Última compra</span><strong>${fmt(u.preco)}</strong>${u.un ? `<span>Por unidade</span><strong>${esc(porUnCurto(u.un))}</strong>` : ''}<span>Onde</span><strong>${esc(u.mercado || 'sem lugar')}</strong><span>Quando</span><strong>${fmtData(u.data)}</strong>
+          <span>Menor ${todosUn ? '(por unidade)' : 'preço'}</span><strong>${todosUn ? esc(porUnCurto(menor.un)) : fmt(menor.preco)}<small style="display:block;font-weight:500;color:var(--muted)">${esc(menor.mercado || '')}, ${fmtData(menor.data)}</small></strong>
+          <span>Preço médio${todosUn ? ' (por unidade)' : ''}</span><strong>${todosUn ? esc(porUnCurto({valor: media, un: u.un.un})) : fmt(media)}</strong></div>` : '<div class="contagem" style="margin-top:10px">Ainda não há compras deste produto.</div>'}
+        ${sug ? `<div class="aviso">A nota indica <b>${esc(embTexto(sug))}</b> por embalagem. Usar para calcular o preço por unidade das compras sem essa informação? <button class="btn texto" data-a="hist-usar-emb">Usar</button></div>` : ''}
+        ${p && p.unidade !== 'kg' ? `<div class="contagem" style="margin-top:8px">${emb ? `Embalagem no cadastro: <b>${esc(embTexto(emb))}</b>.` : 'Embalagem não informada no cadastro.'} <button class="btn texto" data-a="hist-editar">${emb ? 'Alterar' : 'Informar'} no cadastro</button></div>` : ''}
+        ${cs.length ? `<h3 style="margin:14px 0 4px">Últimas compras</h3>${linhas}` : ''}
+        <div class="sheet-acoes">${u ? '<button class="btn pri" data-a="hist-compartilhar">Compartilhar</button>' : ''}${p ? '<button class="btn sec" data-a="hist-editar">Editar produto</button>' : ''}</div>`;
+    },
+    acoes: {
+      async 'hist-compra'(b){ const c = Dados.compras.get(b.dataset.id); if (!c) return; if (c.status !== 'finalizada') return toast('Esta compra ainda está no carrinho da lista.'); await abrirCompra(c.id); },
+      'hist-editar'(){ abrirProduto(pid); },
+      'hist-usar-emb'(){
+        const p = Dados.produtos.get(pid); if (!p) return;
+        const cs = comprasDoProduto(pid); const sug = cs.map(x => embalagemDaCompra(pid, x)).find(e => e && e.origem === 'nota') || lerEmbalagem(p.tamanho); if (!sug) return;
+        Dados.salvarProduto(Object.assign(clone(p), {embalagem: {qtd: sug.qtd, un: sug.un}})); mostrarSheet(); toast('Embalagem guardada no cadastro');
+      },
+      async 'hist-compartilhar'(){
+        const texto = textoCompartilhar(pid);
+        try { if (navigator.share) { await navigator.share({title: nomeDoPid(pid), text: texto}); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+        try { await navigator.clipboard.writeText(texto); toast('Resumo copiado. Cole no WhatsApp.'); }
+        catch { await perguntar('Copie o resumo', texto, {ok: 'Fechar'}); }
+      },
+    },
+  };
+  abrirSheet(s);
+}
+/** Texto do compartilhamento: nome, preço do pacote, preço por unidade, mercado e data da última compra. */
+function textoCompartilhar(pid){
+  const p = Dados.produtos.get(pid), cs = comprasDoProduto(pid), u = cs[0]; if (!u) return nomeDoPid(pid);
+  const nome = nomeDoPid(pid) + (p && p.marca && !norm(nomeDoPid(pid)).includes(norm(p.marca)) ? ` (${p.marca})` : '');
+  const linhas = [nome, `Última compra: ${fmt(u.preco)}${u.un ? ` (${porUnTexto(u.un)}${u.un.un === 'un' ? `, ${embTexto(u.un.emb)}` : ''})` : ''}`, `Onde: ${u.mercado || 'sem lugar'}, em ${fmtData(u.data)}`];
+  return linhas.join('\n').replace(/ /g, ' ');
+}
+
+/* =========================================================
    TELA: INÍCIO (painel do período, atalhos e o que pode estar acabando)
    ========================================================= */
 const PERIODOS_INI = [['mes', 'Este mês'], ['3m', '3 meses'], ['12m', '12 meses']];
@@ -2631,6 +2798,8 @@ function faixaPeriodo(p, deslocar){
   return [ini, fim];
 }
 function telaInicio(){
+  const busca = buscaInicioHTML();
+  if (busca.resultados) return busca.campo + busca.resultados;
   const p = PERIODOS_INI.some(x => x[0] === UI.periodoInicio) ? UI.periodoInicio : 'mes';
   const [i0] = faixaPeriodo(p, 0), [i1, f1] = faixaPeriodo(p, 1);
   const todas = comprasFeitas();
@@ -2638,7 +2807,7 @@ function telaInicio(){
   const fimAnt = Math.min(f1, i1 + (Date.now() - i0));
   const a = agregados(todas.filter(c => c.finalizadaEm >= i0)), b = agregados(todas.filter(c => c.finalizadaEm >= i1 && c.finalizadaEm < fimAnt));
   const ab = compraAberta(), t = ab ? totais(ab) : null;
-  let h = `<div class="chips" role="group" aria-label="Período" style="margin-top:6px">${PERIODOS_INI.map(([v, r]) => `<button class="chip" data-a="periodo-ini" data-v="${v}" aria-pressed="${p === v}">${r}</button>`).join('')}</div>`;
+  let h = busca.campo + `<div class="chips" role="group" aria-label="Período" style="margin-top:6px">${PERIODOS_INI.map(([v, r]) => `<button class="chip" data-a="periodo-ini" data-v="${v}" aria-pressed="${p === v}">${r}</button>`).join('')}</div>`;
   if (_rascunhoNota) h += `<section class="cartao"><h2>Nota em conferência</h2><div class="sub" style="margin:0 0 10px">Você começou a conferir uma nota e não lançou. Ela ficou guardada.</div><button class="btn pri bloco" data-a="ler-nota">Continuar a conferência</button></section>`;
   // gasto do período e comparação com o anterior
   const comp = b.total > 0 ? (() => { const pct = Math.round((a.total - b.total) / b.total * 100); return pct === 0 ? 'Igual ao mesmo trecho do período anterior' : `${Math.abs(pct)}% ${pct < 0 ? 'a menos' : 'a mais'} que no mesmo trecho do período anterior (${fmt(b.total)})`; })() : '';
@@ -2999,6 +3168,7 @@ function abrirProduto(pid, opts = {}){
           <div><label class="rot" for="pMarca">Marca</label><input id="pMarca" class="campo" data-f="marca" value="${esc(f.marca)}" maxlength="40" autocomplete="off"></div>
           <div><label class="rot" for="pTam">Tamanho</label><input id="pTam" class="campo" data-f="tamanho" value="${esc(f.tamanho)}" maxlength="20" placeholder="1 L, 500 g" autocomplete="off"></div>
         </div>
+        ${f.unidade === 'kg' ? '' : `<label class="rot" for="pEmb">Embalagem (para o preço por unidade)</label><div class="campo-linha"><input id="pEmb" class="campo" inputmode="decimal" value="${f.embalagem && f.embalagem.qtd > 0 ? esc(String(f.embalagem.qtd).replace('.', ',')) : ''}" placeholder="Ex.: 52" autocomplete="off"><select id="pEmbUn" class="campo" style="flex:0 0 120px" aria-label="Unidade da embalagem">${['un', 'kg', 'L'].map(u => `<option value="${u}" ${((f.embalagem && f.embalagem.un) || 'un') === u ? 'selected' : ''}>${EMB_ROTULO[u]}</option>`).join('')}</select></div>`}
         <span class="rot">Vendido por</span>
         <div class="seg" role="group"><button type="button" data-a="un" data-v="un" aria-pressed="${f.unidade !== 'kg'}">Unidade</button><button type="button" data-a="un" data-v="kg" aria-pressed="${f.unidade === 'kg'}">Peso (kg)</button></div>
         <span class="rot">Comparar preço por</span>
@@ -3008,11 +3178,18 @@ function abrirProduto(pid, opts = {}){
         <label class="rot" for="pCod">Código de barras</label>
         <div class="campo-linha"><input id="pCod" class="campo" data-f="codigo" value="${esc(f.codigo)}" inputmode="numeric" maxlength="14" placeholder="Opcional" autocomplete="off"><button class="btn sec" data-a="cod-ler">${ICONES.codigo}Ler</button></div>
         <div class="sheet-acoes"><button class="btn pri" data-a="salvar" ${st.salvando ? 'disabled' : ''}>${st.salvando ? 'Salvando…' : (opts.adicionarNaLista && !orig ? 'Salvar e adicionar à lista' : 'Salvar produto')}</button></div>
+        ${orig ? `<div class="sheet-acoes"><button class="btn sec" data-a="historico-prod">Histórico de preços</button></div>` : ''}
         ${orig ? `<div class="sheet-acoes"><button class="btn texto perigo-txt" data-a="excluir">Excluir produto</button></div>` : ''}`;
     },
-    montar(el){ el.querySelectorAll('[data-f]').forEach(i => i.addEventListener('input', () => { f[i.dataset.f] = i.value; })); },
+    montar(el){
+      el.querySelectorAll('[data-f]').forEach(i => i.addEventListener('input', () => { f[i.dataset.f] = i.value; }));
+      const e = el.querySelector('#pEmb'), u = el.querySelector('#pEmbUn');
+      const emb = () => { const n = parseNum(e.value); f.embalagem = n > 0 && n <= 5000 ? {qtd: r3(n), un: ['un', 'kg', 'L'].includes(u.value) ? u.value : 'un'} : null; };
+      if (e) { e.addEventListener('input', emb); u.addEventListener('change', emb); }
+    },
     acoes: {
       'foto-camera'(el, a){ if (a) definirFoto(a); },
+      'historico-prod'(){ abrirHistoricoProduto(f.id); },
       'foto-galeria'(el, a){ if (a) definirFoto(a); },
       'foto-remover'(){ if (st.previa) URL.revokeObjectURL(st.previa); st.previa = null; st.arquivo = null; st.removerFoto = true; mostrarSheet(); },
       un(b){ f.unidade = b.dataset.v === 'kg' ? 'kg' : 'un'; mostrarSheet(); },
@@ -3024,6 +3201,7 @@ function abrirProduto(pid, opts = {}){
       async salvar(){
         if (st.salvando) return;
         f.nome = (f.nome || '').trim(); f.marca = (f.marca || '').trim(); f.tamanho = (f.tamanho || '').trim();
+        if (!(f.embalagem && f.embalagem.qtd > 0) || f.unidade === 'kg') delete f.embalagem;
         if (!f.nome) return toast('Informe o nome do produto.');
         f.codigo = (f.codigo || '').replace(/\D/g, '');
         if (f.codigo && !/^\d{8,14}$/.test(f.codigo)) return toast('O código de barras deve ter de 8 a 14 dígitos.');
@@ -3796,6 +3974,7 @@ async function restaurarBackup(arq){
     categoriaId: typeof p.categoriaId === 'string' ? p.categoriaId.slice(0, 60) : null, codigo: /^\d{8,14}$/.test(p.codigo || '') ? p.codigo : '',
     fotoId: /^[0-9a-f]{32}$/.test(p.fotoId || '') ? p.fotoId : null, fotoData: typeof p.fotoData === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(p.fotoData) && p.fotoData.length < 200000 ? p.fotoData : null,
     criadoEm: Number(p.criadoEm) || Date.now(), ...(MEDIDAS[p.medida] ? {medida: p.medida} : {}),
+    ...(p.embalagem && Number(p.embalagem.qtd) > 0 && Number(p.embalagem.qtd) <= 5000 && ['un', 'kg', 'L'].includes(p.embalagem.un) ? {embalagem: {qtd: Number(p.embalagem.qtd), un: p.embalagem.un}} : {}),
     descNota: Array.isArray(p.descNota) ? p.descNota.filter(d => typeof d === 'string').slice(-5).map(d => d.slice(0, 80)) : [],
     comparacoes: Array.isArray(p.comparacoes) ? p.comparacoes.slice(-40).filter(r => r && Number(r.unit) > 0 && MEDIDAS[r.medida]).map(r => ({em: Number(r.em) || 0, lugar: str(r.lugar, 40), medida: r.medida, marca: str(r.marca, 40), preco: Number(r.preco) || 0, qtdEmb: Number(r.qtdEmb) || 1, tam: Number(r.tam) || 0, sub: str(r.sub, 10), promo: str(r.promo, 10), unit: Number(r.unit)})) : []}));
   const temAberta = !!compraAberta();
@@ -3806,7 +3985,7 @@ async function restaurarBackup(arq){
   if (!(await confirmar(`Importar ${produtos.length} produtos e ${compras.length} compras? Itens com o mesmo identificador serão substituídos.`, 'Importar'))) return;
   toast('Importando…', null, 60000);
   try {
-    await Dados.importar(produtos, compras);
+    await Dados.importar(produtos, compras); esquecerLinhasNotas();
     for (const n of Array.isArray(o.notas) ? o.notas : []) {
       if (!n || typeof n.id !== 'string' || !/^n[\w-]{1,60}$/.test(n.id)) continue;
       let atual = null; try { atual = await BD.ler('notas', n.id); } catch {}
@@ -3857,6 +4036,7 @@ const ACOES = {
   'filtro-prod'(b){ UI.catProdutos = b.dataset.v; salvarUI(); render(); },
   'novo-produto'(){ abrirProduto(null, {nome: buscaProdutos.trim()}); },
   'ler-nota'(){ abrirLerNota(); },
+  historico(b){ abrirHistoricoProduto(b.dataset.pid); },
   lancamentos(){ abrirLancamentos(); },
   lugares(){ abrirLugares(); },
   'novo-produto-busca-p'(){ abrirProduto(null, {nome: buscaProdutos.trim()}); },
@@ -3972,6 +4152,7 @@ window.addEventListener('popstate', () => {
 document.addEventListener('input', e => {
   if (e.target.id === 'buscaLista') { buscaLista = e.target.value; render(); }
   else if (e.target.id === 'buscaProdutos') { buscaProdutos = e.target.value; render(); }
+  else if (e.target.id === 'buscaInicio') { buscaInicio = e.target.value; render(); }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { if ($('#modal-root').classList.contains('on')) return; if (topoSheet()) fecharSheet(); } });
 let _scrollT = null;
