@@ -276,6 +276,8 @@ body.mercado .fab{padding:18px 24px;font-size:18px}
 /* ===== Ajustes ===== */
 .link-app{font-size:13px;word-break:break-all;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px;user-select:all;-webkit-user-select:all;margin-top:8px}
 .cfg-linha{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.cat-sub{font-size:13px;color:var(--muted);margin:-4px 0 6px 40px}
+.cat-sub .btn.texto{padding:4px 2px;font-size:13px}
 .cfg-linha:first-child{border-top:0}
 .cfg-linha .campo{padding:9px 12px}
 .cor-btn{flex:none;width:30px;height:30px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line)}
@@ -989,7 +991,7 @@ const SEMENTE = {
 /* =========================================================
    CONSTANTES
    ========================================================= */
-const VERSAO = 'v2.10.2';
+const VERSAO = 'v2.11.0';
 // bibliotecas guardadas no próprio repositório (funcionam sem internet)
 const URL_ZXING = 'lib/zxing.min.js';
 const URL_JSPDF = 'lib/jspdf.umd.min.js';
@@ -3643,13 +3645,121 @@ async function exportarXLSX(){
 }
 
 /* =========================================================
+   CATEGORIAS: REORGANIZAR PRODUTOS E EXCLUIR COM DESTINO (com Desfazer)
+   ========================================================= */
+/** Produtos de uma categoria ('_sem' = sem categoria), em ordem alfabética. */
+const produtosDaCategoria = id => [...Dados.produtos.values()].filter(p => (catDoProduto(p) || '_sem') === id).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+/** Cria uma categoria pelo nome (ou devolve a que já tem esse nome); devolve o id. */
+function criarCategoria(nome){
+  nome = String(nome || '').trim().slice(0, 30); if (!nome) return null;
+  const existe = Dados.cfg.categorias.find(x => norm(x.nome) === norm(nome)); if (existe) return existe.id;
+  const id = 'c' + novoId();
+  Dados.salvarCfg(c => c.categorias.push({id, nome, cor: CORES[c.categorias.length % CORES.length]}));
+  return id;
+}
+/** Move produtos (pid → id da categoria ou null) e a cópia da categoria nos itens das compras; exclui a categoria se pedido. Devolve o "antes" para desfazer. */
+function aplicarCategorias(mapa, excluirId){
+  const antes = {cats: clone(Dados.cfg.categorias), prods: new Map(), itens: new Map()};
+  for (const [pid, dest] of mapa) {
+    const p = Dados.produtos.get(pid); if (!p) continue;
+    antes.prods.set(pid, p.categoriaId ?? null);
+    if ((p.categoriaId ?? null) !== dest) Dados.salvarProduto(Object.assign(clone(p), {categoriaId: dest}));
+  }
+  for (const c0 of [...Dados.compras.values()]) {
+    const c = clone(c0); let mud = false;
+    for (const it of c.itens) if (mapa.has(it.pid) && (it.categoriaId ?? null) !== mapa.get(it.pid)) {
+      const k = c.id + '|' + it.pid; if (!antes.itens.has(k)) antes.itens.set(k, it.categoriaId ?? null);
+      it.categoriaId = mapa.get(it.pid); mud = true;
+    }
+    if (mud) Dados.salvarCompra(c);
+  }
+  if (excluirId) {
+    Dados.salvarCfg(x => { x.categorias = x.categorias.filter(k => k.id !== excluirId); });
+    if (UI.filtroCat === excluirId) UI.filtroCat = ''; if (UI.catProdutos === excluirId) UI.catProdutos = ''; salvarUI();
+  }
+  return antes;
+}
+/** Desfaz: categoria excluída volta na mesma posição (nome e cor), produtos e itens voltam à categoria de antes. */
+function desfazerCategorias(antes){
+  Dados.salvarCfg(x => {
+    const ids = new Set(x.categorias.map(k => k.id));
+    antes.cats.forEach((k, i) => { if (!ids.has(k.id)) x.categorias.splice(Math.min(i, x.categorias.length), 0, clone(k)); });
+  });
+  for (const [pid, cat] of antes.prods) { const p = Dados.produtos.get(pid); if (p && (p.categoriaId ?? null) !== cat) Dados.salvarProduto(Object.assign(clone(p), {categoriaId: cat})); }
+  const porCompra = new Map();
+  for (const [k, cat] of antes.itens) { const [cid, pid] = k.split('|'); if (!porCompra.has(cid)) porCompra.set(cid, new Map()); porCompra.get(cid).set(pid, cat); }
+  for (const [cid, m] of porCompra) {
+    const c0 = Dados.compras.get(cid); if (!c0) continue;
+    const c = clone(c0); for (const it of c.itens) if (m.has(it.pid)) it.categoriaId = m.get(it.pid);
+    Dados.salvarCompra(c);
+  }
+}
+/** FOLHA: produtos de uma categoria, cada um com destino próprio. excluir = true pede destino de todos e apaga a categoria. */
+function abrirReorganizarCategoria(catId, excluir){
+  const cat = catId === '_sem' ? SEM_CAT : Dados.cfg.categorias.find(c => c.id === catId); if (!cat) return;
+  const linhas = produtosDaCategoria(catId).map(p => ({pid: p.id, marcado: false, destino: excluir ? '' : catId}));
+  let destinoLote = '';
+  const nomeCat = esc(cat.nome);
+  /** Opções do seletor: categorias (sem a que vai ser excluída), "Sem categoria" e "Nova categoria…". */
+  const opcoes = (valor, vazio) => `${vazio ? `<option value="" ${valor === '' ? 'selected' : ''}>${vazio}</option>` : ''}`
+    + Dados.cfg.categorias.filter(c => !(excluir && c.id === catId)).map(c => `<option value="${esc(c.id)}" ${valor === c.id ? 'selected' : ''}>${esc(c.nome)}${!excluir && c.id === catId ? ' (continua)' : ''}</option>`).join('')
+    + `<option value="_sem" ${valor === '_sem' ? 'selected' : ''}>Sem categoria${!excluir && catId === '_sem' ? ' (continua)' : ''}</option><option value="_nova">Nova categoria…</option>`;
+  const mudancas = () => linhas.filter(l => l.destino && l.destino !== catId).length;
+  const s = {
+    titulo: excluir ? `Excluir “${cat.nome}”` : `Reorganizar “${cat.nome}”`,
+    html(){
+      const marc = linhas.filter(l => l.marcado).length, falta = linhas.filter(l => !l.destino).length;
+      return `<div class="sub" style="margin:0 0 10px">${excluir ? `A categoria <b>${nomeCat}</b> tem ${linhas.length} ${linhas.length === 1 ? 'produto' : 'produtos'}. Escolha para onde cada um vai; depois disso dá para excluir.` : `Escolha a categoria certa de cada produto de <b>${nomeCat}</b>.`} Os relatórios e as compras antigas acompanham a mudança.</div>
+        <div class="cfg-linha" style="flex-wrap:wrap;gap:8px"><button class="btn texto" data-a="rc-todos">${marc === linhas.length && linhas.length ? 'Desmarcar todos' : 'Marcar todos'}</button>
+          <div class="campo-linha" style="flex:1 1 100%"><select id="rcLote" class="campo" aria-label="Destino dos marcados">${opcoes(destinoLote, 'Mover marcados para…')}</select><button class="btn sec" data-a="rc-mover" ${marc && destinoLote ? '' : 'disabled'}>Mover${marc ? ` (${marc})` : ''}</button></div></div>
+        ${linhas.map((l, i) => { const p = Dados.produtos.get(l.pid); return `<div class="nota-linha${l.marcado ? ' ok' : ''}"><button class="check" data-a="rc-sel" data-i="${i}" aria-label="Marcar ${esc(p.nome)}">${svgCheck}</button>
+          <div class="info"><div class="nome">${esc(p.nome)}</div><div class="meta"><span>${esc([p.marca, p.tamanho].filter(Boolean).join(' ') || 'sem marca')}</span></div>
+          <select class="campo${l.destino ? '' : ' falta'}" data-rc="${i}" aria-label="Destino de ${esc(p.nome)}" style="margin-top:6px">${opcoes(l.destino, excluir ? 'Escolha o destino…' : '')}</select></div></div>`; }).join('')}
+        <div class="sheet-acoes">${excluir
+          ? `<button class="btn perigo" data-a="rc-excluir" ${falta ? 'disabled' : ''}>${falta ? `Falta destino para ${falta} ${falta === 1 ? 'produto' : 'produtos'}` : `Excluir “${nomeCat}”`}</button>`
+          : `<button class="btn pri" data-a="rc-salvar" ${mudancas() ? '' : 'disabled'}>Salvar${mudancas() ? ` (${mudancas()} ${mudancas() === 1 ? 'mudança' : 'mudanças'})` : ''}</button>`}</div>`;
+    },
+    montar(el){
+      /** "Nova categoria…" pede o nome, cria e já seleciona. */
+      const escolher = async (v, aplicar) => {
+        if (v !== '_nova') return aplicar(v);
+        const nome = await perguntar('Nova categoria', '', {placeholder: 'Nome da categoria', ok: 'Criar'});
+        const id = nome ? criarCategoria(nome) : null;
+        if (id) aplicar(id); mostrarSheet();
+      };
+      el.querySelector('#rcLote').addEventListener('change', e => escolher(e.target.value, v => { destinoLote = v; mostrarSheet(); }));
+      el.querySelectorAll('[data-rc]').forEach(sel => sel.addEventListener('change', e => { const l = linhas[Number(sel.dataset.rc)]; escolher(e.target.value, v => { l.destino = v; mostrarSheet(); }); }));
+    },
+    acoes: {
+      'rc-sel'(b){ const l = linhas[Number(b.dataset.i)]; if (l) { l.marcado = !l.marcado; mostrarSheet(); } },
+      'rc-todos'(){ const todos = linhas.every(l => l.marcado); linhas.forEach(l => { l.marcado = !todos; }); mostrarSheet(); },
+      'rc-mover'(){ if (!destinoLote) return; linhas.forEach(l => { if (l.marcado) { l.destino = destinoLote; l.marcado = false; } }); mostrarSheet(); },
+      'rc-salvar'(){ concluir(false); },
+      'rc-excluir'(){ if (linhas.every(l => l.destino)) concluir(true); },
+    },
+  };
+  /** Grava os destinos e oferece Desfazer por 10 segundos. */
+  function concluir(apagar){
+    const mapa = new Map(linhas.filter(l => l.destino).map(l => [l.pid, l.destino === '_sem' ? null : l.destino]));
+    const n = linhas.filter(l => l.destino && l.destino !== catId).length;
+    const antes = aplicarCategorias(mapa, apagar ? catId : null);
+    fecharSheet(); render();
+    toast(apagar ? `Categoria “${cat.nome}” excluída` + (n ? `, ${n} ${n === 1 ? 'produto movido' : 'produtos movidos'}` : '') : `${n} ${n === 1 ? 'produto movido' : 'produtos movidos'}`,
+      {rotulo: 'Desfazer', fn: () => { desfazerCategorias(antes); render(); toast('Desfeito: tudo voltou como estava'); }}, 10000);
+  }
+  abrirSheet(s);
+}
+
+/* =========================================================
    TELA: AJUSTES
    ========================================================= */
 const svgLixo = '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
 function telaAjustes(){
   const cfg = Dados.cfg;
   let h = `<h2 class="secao-titulo">Categorias</h2><section class="cartao">`;
-  h += cfg.categorias.map(c => `<div class="cfg-linha"><button class="cor-btn" style="background:${esc(c.cor)}" data-a="cat-cor" data-id="${esc(c.id)}" aria-label="Trocar cor de ${esc(c.nome)}"></button><input class="campo" data-ch="cat-nome" data-id="${esc(c.id)}" value="${esc(c.nome)}" maxlength="30" aria-label="Nome da categoria"><button class="ico-btn" data-a="cat-excluir" data-id="${esc(c.id)}" aria-label="Excluir ${esc(c.nome)}">${svgLixo}</button></div>`).join('');
+  h += cfg.categorias.map(c => `<div class="cfg-linha"><button class="cor-btn" style="background:${esc(c.cor)}" data-a="cat-cor" data-id="${esc(c.id)}" aria-label="Trocar cor de ${esc(c.nome)}"></button><input class="campo" data-ch="cat-nome" data-id="${esc(c.id)}" value="${esc(c.nome)}" maxlength="30" aria-label="Nome da categoria"><button class="ico-btn" data-a="cat-excluir" data-id="${esc(c.id)}" aria-label="Excluir ${esc(c.nome)}">${svgLixo}</button></div>
+    <div class="cat-sub">${(n => `${n} ${n === 1 ? 'produto' : 'produtos'}${n ? ` · <button class="btn texto" data-a="cat-reorg" data-id="${esc(c.id)}">Reorganizar produtos</button>` : ''}`)(produtosDaCategoria(c.id).length)}</div>`).join('');
+  h += (n => n ? `<div class="cfg-linha"><span class="cor-btn" style="background:${SEM_CAT.cor}" aria-hidden="true"></span><span style="flex:1">Sem categoria</span></div><div class="cat-sub">${n} ${n === 1 ? 'produto' : 'produtos'} · <button class="btn texto" data-a="cat-reorg" data-id="_sem">Reorganizar produtos</button></div>` : '')(produtosDaCategoria('_sem').length);
   h += `<div class="campo-linha" style="margin-top:10px"><input id="novaCat" class="campo" maxlength="30" placeholder="Nova categoria" autocomplete="off"><button class="btn pri" data-a="cat-add">Adicionar</button></div></section>`;
   const parecidos = lugaresParecidos().length, comCnpj = cfg.mercados.filter(m => cnpjsDoLugar(m).length).length;
   h += `<h2 class="secao-titulo">Lugares e fornecedores</h2><section class="cartao"><div class="sub" style="margin:0 0 10px">${cfg.mercados.length} ${cfg.mercados.length === 1 ? 'lugar' : 'lugares'}, ${comCnpj} com CNPJ${parecidos ? `. ${parecidos} ${parecidos === 1 ? 'grupo parece repetido' : 'grupos parecem repetidos'}` : ''}.</div><button class="btn sec" data-a="lugares">Gerenciar lugares</button></section>`;
@@ -3769,11 +3879,12 @@ const ACOES = {
   },
   async 'cat-excluir'(b){
     const k = Dados.cfg.categorias.find(x => x.id === b.dataset.id); if (!k) return;
-    const n = [...Dados.produtos.values()].filter(p => p.categoriaId === k.id).length;
-    if (!(await confirmar(`Excluir a categoria "${k.nome}"?` + (n ? ` ${n} ${n === 1 ? 'produto ficará' : 'produtos ficarão'} sem categoria.` : ''), 'Excluir', true))) return;
-    Dados.salvarCfg(c => { c.categorias = c.categorias.filter(x => x.id !== k.id); });
-    if (UI.filtroCat === k.id) UI.filtroCat = ''; if (UI.catProdutos === k.id) UI.catProdutos = ''; salvarUI();
+    if (produtosDaCategoria(k.id).length) return abrirReorganizarCategoria(k.id, true);
+    if (!(await confirmar(`Excluir a categoria "${k.nome}"? Ela não tem produtos.`, 'Excluir', true))) return;
+    const antes = aplicarCategorias(new Map(), k.id); render();
+    toast(`Categoria “${k.nome}” excluída`, {rotulo: 'Desfazer', fn: () => { desfazerCategorias(antes); render(); toast('Desfeito: tudo voltou como estava'); }}, 10000);
   },
+  'cat-reorg'(b){ if (!produtosDaCategoria(b.dataset.id).length) return toast('Nenhum produto nesta categoria.'); abrirReorganizarCategoria(b.dataset.id, false); },
   async 'mer-excluir'(b){ if (await confirmar(`Remover "${b.dataset.v}" da lista de mercados? O histórico não muda.`, 'Remover')) Dados.salvarCfg(c => { c.mercados = c.mercados.filter(m => m !== b.dataset.v); }); },
   async backup(){
     let notas = []; try { notas = (await BD.todos('notas')).map(n => Object.assign({}, n, {fotos: []})); } catch {}
