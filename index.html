@@ -138,6 +138,7 @@ main{padding:0 16px calc(110px + env(safe-area-inset-bottom,0px));max-width:680p
 .lugar-opcoes button{display:block;width:100%;text-align:left;padding:12px 14px;border:0;border-top:1px solid var(--line);background:none;font-size:16px}
 .lugar-opcoes button:first-child{border-top:0}
 .tab tr.riscado td{text-decoration:line-through;opacity:.6}
+.conversor{background:var(--surface-2);border-radius:12px;padding:10px 12px;margin-top:8px;font-size:14px;line-height:1.6}
 .campo.falta{border-color:var(--danger)}
 .qtd-mini span{min-width:50px;text-align:center;font-weight:700;font-size:14px;white-space:nowrap}
 .valor.est{color:var(--muted);font-weight:500}
@@ -992,7 +993,7 @@ const SEMENTE = {
 /* =========================================================
    CONSTANTES
    ========================================================= */
-const VERSAO = 'v2.13.0';
+const VERSAO = 'v2.14.0';
 // bibliotecas guardadas no próprio repositório (funcionam sem internet)
 const URL_ZXING = 'lib/zxing.min.js';
 const URL_JSPDF = 'lib/jspdf.umd.min.js';
@@ -1961,8 +1962,10 @@ function abrirConferenciaComEstado(st){
       const linhas = st.itens.map((l, i) => {
         const p = l.alvo ? Dados.produtos.get(l.alvo) : null; const nome = p ? p.nome : l.nome;
         const preco = l.unit > 0 ? l.unit : (l.qtd > 0 ? ((l.total || 0) + (l.desconto || 0)) / l.qtd : 0);
+        const embL = l.unidade === 'kg' ? null : (l.emb || lerEmbalagem(l.descricao) || (p && p.unidade !== 'kg' && p.embalagem && p.embalagem.qtd > 0 ? p.embalagem : null));
+        const porUnL = embL && l.qtd > 0 && l.total > 0 ? `<span>${esc(qtdMedida(embL.qtd * l.qtd, embL.un))} · ${esc(porUnCurto({valor: l.total / (embL.qtd * l.qtd), un: embL.un}))}</span>` : '';
         return `<div class="nota-linha${l.incluir ? ' ok' : ' fora'}"><button class="check" data-a="nota-incluir" data-i="${i}" aria-label="${l.incluir ? 'Não incluir' : 'Incluir'}: ${esc(nome)}">${svgCheck}</button>
-          <button class="info" data-a="nota-item" data-i="${i}"><div class="nome-linha"><div class="nome">${esc(nome)}</div>${seloLinha(l, p)}</div><div class="meta"><span>${esc(l.descricao || (l.manual ? 'adicionado à mão' : ''))}</span><span>${esc(fmtQtd(l.qtd, l.unidade))} × ${fmt(preco)}</span>${l.desconto > 0 ? `<span class="badge alerta">− ${fmt(l.desconto)} desconto</span>` : ''}</div></button>
+          <button class="info" data-a="nota-item" data-i="${i}"><div class="nome-linha"><div class="nome">${esc(nome)}</div>${seloLinha(l, p)}</div><div class="meta"><span>${esc(l.descricao || (l.manual ? 'adicionado à mão' : ''))}</span><span>${esc(fmtQtd(l.qtd, l.unidade))} × ${fmt(preco)}</span>${l.desconto > 0 ? `<span class="badge alerta">− ${fmt(l.desconto)} desconto</span>` : ''}${porUnL}</div></button>
           <div class="valor">${fmt(l.total)}</div></div>`;
       }).join('');
       return `${st.avisos.map(a => `<div class="aviso" style="margin-top:0;margin-bottom:10px">${esc(a)}</div>`).join('')}
@@ -2026,6 +2029,7 @@ const linhaManual = () => ({numero: null, descricao: '', manual: true, unit: nul
 /** FOLHA: editar os itens de uma compra já salva (quantidade, preço, produto, categoria, excluir e adicionar). */
 async function abrirEditarCompra(id){
   const c0 = Dados.compras.get(id); if (!c0 || c0.status !== 'finalizada') return;
+  await carregarLinhasNotas();
   const notaIds = [...new Set(c0.itens.map(i => i.notaId).filter(Boolean))];
   const notas = (await Promise.all(notaIds.map(n => BD.ler('notas', n).catch(() => null)))).filter(Boolean);
   const totalNota = notas.length === 1 ? (notas[0].totalNota || notas[0].total || null) : null;
@@ -2033,7 +2037,7 @@ async function abrirEditarCompra(id){
   const vivos = () => linhas.filter(L => !L.excluido);
   const soma = () => r2(vivos().reduce((t, L) => t + L.it.qtd * L.it.preco, 0));
   const mudouValor = L => !L.antes || L.it.pid !== L.antes.pid || Math.abs(L.it.qtd - L.antes.qtd) > 0.0005 || Math.abs(L.it.preco - L.antes.preco) > 0.00005;
-  const alterado = () => linhas.some(L => L.excluido ? !!L.antes : (!L.antes || mudouValor(L) || L.cat !== undefined || L.novo));
+  const alterado = () => linhas.some(L => L.excluido ? !!L.antes : (!L.antes || mudouValor(L) || L.cat !== undefined || L.novo || L.embMudou));
   const nomeL = L => L.novo ? L.novo.nome : nomeDoPid(L.it.pid);
   const s = {
     titulo: 'Editar compra de ' + fmtData(c0.finalizadaEm),
@@ -2053,11 +2057,11 @@ async function abrirEditarCompra(id){
         <div class="sheet-acoes"><button class="btn pri" data-a="ec-salvar" ${alterado() ? '' : 'disabled'}>Salvar alterações</button></div>`;
     },
     acoes: {
-      'ec-item'(b){ const L = linhas[Number(b.dataset.i)]; if (L) abrirItemCompra(L, linhas); },
+      'ec-item'(b){ const L = linhas[Number(b.dataset.i)]; if (L) abrirItemCompra(L, linhas, id); },
       'ec-restaurar'(b){ const L = linhas[Number(b.dataset.i)]; if (L) { L.excluido = false; mostrarSheet(); } },
       'ec-adicionar'(){
         const L = {it: {pid: '', nome: '', marca: '', categoriaId: null, unidade: 'un', qtd: 1, preco: 0, comprado: true, compradoEm: c0.finalizadaEm, local: c0.mercado || '', obs: null, sugestao: null, manual: true}, antes: null, excluido: false, adicionando: true};
-        linhas.push(L); abrirItemCompra(L, linhas);
+        linhas.push(L); abrirItemCompra(L, linhas, id);
       },
       async 'ec-salvar'(){ await salvarEdicaoCompra(); },
     },
@@ -2086,6 +2090,8 @@ async function abrirEditarCompra(id){
     });
     c.total = r2(c.itens.reduce((t, i) => t + i.qtd * i.preco, 0));
     Dados.salvarCompra(c);
+    // tamanho da embalagem guardado no cadastro do produto, quando pedido
+    for (const L of vs) { const p = Dados.produtos.get(L.it.pid); if (L.embGuardar && L.embGuardar.qtd > 0 && p && p.unidade !== 'kg') Dados.salvarProduto(Object.assign(clone(p), {embalagem: {qtd: L.embGuardar.qtd, un: L.embGuardar.un}})); }
     // nota guardada: o lido continua lá; marca excluídos e editados, troca o produto e atualiza o total lançado
     for (const n of notas) {
       const n2 = clone(n);
@@ -2108,9 +2114,15 @@ async function abrirEditarCompra(id){
 }
 
 /** FOLHA: um item da compra salva (produto, quantidade, preço, total, categoria, original, excluir). */
-function abrirItemCompra(L, linhas){
+function abrirItemCompra(L, linhas, compraId){
   let q = '', pronto = false;
   const it = L.it, unid = () => (it.pid && Dados.produtos.get(it.pid)?.unidade) || it.unidade || 'un';
+  // conversor: tamanho da embalagem desta compra (informado, lido na nota ou do cadastro) e preço cheio da nota
+  const embInicial = () => { if (it.emb && it.emb.qtd > 0) return it.emb; const e = it.pid ? embalagemDaCompra(it.pid, {compraId, preco: it.preco}) : null; return e ? {qtd: e.qtd, un: e.un} : null; };
+  let emb = embInicial(), embGuardar = L.embGuardar ? true : !(it.pid && Dados.produtos.get(it.pid)?.embalagem), mexeuEmb = false;
+  const emb0 = JSON.stringify(emb || null);
+  const cheio = () => (it.notaId && _linhasNotas && _linhasNotas.cheioNotaPid.get(it.notaId + '|' + (L.antes ? L.antes.pid : it.pid))) || it.preco;
+  const contar = el => { const c = el.querySelector('#icConta'); if (c) c.innerHTML = contaConversorHTML(emb, it.qtd, cheio(), it.qtd * it.preco); };
   /** Original: o guardado na primeira edição; senão, o valor salvo antes desta edição (se já mudou). */
   const original = () => (L.antes && L.antes.orig) || (L.antes && (Math.abs(it.qtd - L.antes.qtd) > 0.0005 || Math.abs(it.preco - L.antes.preco) > 0.00005 || it.pid !== L.antes.pid) ? {qtd: L.antes.qtd, preco: L.antes.preco, pid: L.antes.pid} : null);
   const resHTML = () => (q.trim() ? ordenarProdutos([...Dados.produtos.values()].filter(x => casa(textoBusca(x), q))).slice(0, 6) : [])
@@ -2126,6 +2138,7 @@ function abrirItemCompra(L, linhas){
           : `<div class="contagem" style="margin-top:0">${it.pid ? 'Produto excluído do catálogo: ' + esc(it.nome) : 'Escolha o produto abaixo ou cadastre um novo.'}</div>`}
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"><div><label class="rot" for="icQtd">Qtd${unid() === 'kg' ? ' (kg)' : ''}</label><input id="icQtd" class="campo" inputmode="decimal" data-c="qtd" value="${esc(String(it.qtd).replace('.', ','))}" autocomplete="off"></div><div><label class="rot" for="icPreco">${unid() === 'kg' ? 'Preço/kg' : 'Preço un.'}</label><input id="icPreco" class="campo" inputmode="decimal" data-c="preco" value="${it.preco > 0 ? esc(fmtNum2(it.preco)) : ''}" autocomplete="off"></div><div><label class="rot" for="icSub">Subtotal</label><input id="icSub" class="campo" inputmode="decimal" data-c="sub" value="${it.preco > 0 ? esc(fmtNum2(r2(it.qtd * it.preco))) : ''}" autocomplete="off"></div></div>
         <div class="contagem">Mude quantidade, preço ou subtotal: o outro valor se ajusta.</div>
+        ${unid() === 'kg' ? '' : conversorHTML('ic', emb, embGuardar)}
         <label class="rot" for="icBusca">${p || it.pid ? 'Trocar por outro produto' : 'Produto'}</label><input id="icBusca" class="campo" type="search" value="${esc(q)}" placeholder="Buscar no catálogo" autocomplete="off">
         <div id="icRes">${resHTML()}</div>
         ${L.novo ? '' : '<button class="btn texto" data-a="ic-novo">Cadastrar como produto novo</button>'}
@@ -2141,7 +2154,9 @@ function abrirItemCompra(L, linhas){
         if (k === 'qtd') { it.qtd = r3(v); if (it.preco > 0) el.querySelector('#icSub').value = fmtNum2(r2(it.qtd * it.preco)); }
         else if (k === 'preco') { it.preco = Math.round(v * 10000) / 10000; el.querySelector('#icSub').value = it.preco > 0 ? fmtNum2(r2(it.qtd * it.preco)) : ''; }
         else if (k === 'sub') { it.preco = it.qtd > 0 ? Math.round(v / it.qtd * 10000) / 10000 : 0; el.querySelector('#icPreco').value = it.preco > 0 ? fmtNum2(it.preco) : ''; }
+        contar(el);
       }));
+      ligarConversor(el, 'ic', () => emb, (e, g) => { emb = e; embGuardar = g; mexeuEmb = true; }, () => contar(el));
       const b = el.querySelector('#icBusca'); b.addEventListener('input', () => { q = b.value; el.querySelector('#icRes').innerHTML = resHTML(); });
     },
     acoes: {
@@ -2164,6 +2179,14 @@ function abrirItemCompra(L, linhas){
         if (!(it.pid || (L.novo && String(L.novo.nome).trim()))) return toast('Escolha o produto ou informe o nome do produto novo.');
         if (!(it.qtd > 0)) return toast('Informe a quantidade.');
         if (!(it.preco > 0)) return toast('Informe o preço.');
+        if (unid() !== 'kg') {
+          // só grava o tamanho na compra se ele foi mexido; o cadastro só muda se pedido e se for diferente do que já está lá
+          const mudouEmb = JSON.stringify(emb || null) !== emb0;
+          if (mudouEmb) { if (emb) it.emb = {qtd: emb.qtd, un: emb.un}; else delete it.emb; }
+          const pe = it.pid && Dados.produtos.get(it.pid) && Dados.produtos.get(it.pid).embalagem;
+          L.embGuardar = embGuardar && !!emb && (mudouEmb || mexeuEmb) && !(pe && pe.qtd === emb.qtd && pe.un === emb.un) ? {qtd: emb.qtd, un: emb.un} : (L.embGuardar || null);
+          if (mudouEmb || L.embGuardar) L.embMudou = true;
+        }
         pronto = true; L.adicionando = false; fecharSheet();
       },
     },
@@ -2177,6 +2200,9 @@ function abrirItemNota(l, aoMudar, aoDescartar){
   if (!l) return;
   const mudou = () => { if (aoMudar) aoMudar(); };
   let pronto = false;
+  const p0 = l.alvo ? Dados.produtos.get(l.alvo) : null;
+  let emb = l.emb || lerEmbalagem(l.descricao) || (p0 && p0.embalagem && p0.embalagem.qtd > 0 ? p0.embalagem : null) || null;
+  let embGuardar = l.embGuardar !== undefined ? l.embGuardar : !(p0 && p0.embalagem && p0.embalagem.qtd > 0);
   let q = '';
   const resHTML = () => (q.trim() ? ordenarProdutos([...Dados.produtos.values()].filter(x => casa(textoBusca(x), q))).slice(0, 6) : [])
     .map(x => `<div class="res-linha">${thumbHTML(x, x.nome)}<div class="info"><div class="nome">${esc(x.nome)}</div><div class="meta"><span>${esc([x.marca, x.tamanho].filter(Boolean).join(' '))}</span></div></div><button class="mini-add" data-a="ni-ligar" data-pid="${esc(x.id)}">Ligar</button></div>`).join('');
@@ -2197,6 +2223,7 @@ function abrirItemNota(l, aoMudar, aoDescartar){
         <span class="rot">Vendido por</span><div class="seg" role="group"><button type="button" data-a="ni-un" data-v="un" aria-pressed="${l.unidade !== 'kg'}">Unidade</button><button type="button" data-a="ni-un" data-v="kg" aria-pressed="${l.unidade === 'kg'}">Peso (kg)</button></div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"><div><label class="rot" for="niQtd">Qtd${l.unidade === 'kg' ? ' (kg)' : ''}</label><input id="niQtd" class="campo" inputmode="decimal" data-l="qtd" value="${esc(String(l.qtd).replace('.', ','))}" autocomplete="off"></div><div><label class="rot" for="niUnit">${l.unidade === 'kg' ? 'Preço/kg' : 'Preço un.'}</label><input id="niUnit" class="campo" inputmode="decimal" data-l="unit" value="${preco > 0 ? esc(fmtNum2(preco)) : ''}" autocomplete="off"></div><div><label class="rot" for="niTotal">Total pago</label><input id="niTotal" class="campo" inputmode="decimal" data-l="total" value="${esc(fmtNum2(l.total))}" autocomplete="off"></div></div>
         <div class="contagem" id="niPreco">${precoHTML()}</div>
+        ${l.unidade === 'kg' ? '' : conversorHTML('ni', emb, embGuardar)}
         <label class="rot" for="niBusca">${p ? 'Trocar por outro produto cadastrado' : 'Ou ligar a um produto cadastrado'}</label><input id="niBusca" class="campo" type="search" value="${esc(q)}" placeholder="Buscar no catálogo" autocomplete="off">
         <div id="niRes">${resHTML()}</div>
         ${`<span class="rot">${p ? 'Categoria do produto (vale para todas as compras dele)' : 'Categoria'}</span><div class="chips quebra">${Dados.cfg.categorias.map(c => `<button type="button" class="chip" data-a="ni-cat" data-v="${esc(c.id)}" aria-pressed="${catAtual === c.id}"><i class="dot" style="background:${esc(c.cor)}"></i>${esc(c.nome)}</button>`).join('')}</div>`}
@@ -2213,8 +2240,9 @@ function abrirItemNota(l, aoMudar, aoDescartar){
           l.unit = preco > 0 ? preco : null; l.bruto = r2(l.qtd * preco);
         }
         else l[k] = i.value;
-        mudou();
+        mudou(); contarNi(el);
       }));
+      ligarConversor(el, 'ni', () => emb, (e, g) => { emb = e; embGuardar = g; l.emb = e || null; l.embGuardar = g; mudou(); }, () => contarNi(el));
       const b = el.querySelector('#niBusca'); b.addEventListener('input', () => { q = b.value; el.querySelector('#niRes').innerHTML = resHTML(); });
     },
     acoes: {
@@ -2237,11 +2265,14 @@ function abrirItemNota(l, aoMudar, aoDescartar){
         if (!(l.qtd > 0)) return toast('Informe a quantidade.');
         if (!l.alvo && !String(l.nome || '').trim()) return toast('Informe o nome do produto.');
         if (l.manual && !(l.total > 0)) return toast('Informe o preço ou o total pago.');
+        if (emb && l.unidade !== 'kg') { l.emb = emb; l.embGuardar = embGuardar; }
         l.incluir = true; l.confira = ''; pronto = true; mudou(); fecharSheet();
       },
     },
     aoFechar(){ if (aoDescartar && !pronto) aoDescartar(); },
   };
+  /** Conta do conversor com os valores atuais do item (preço cheio = preço impresso; pago = total do item). */
+  function contarNi(el){ const c = el.querySelector('#niConta'); if (c) c.innerHTML = contaConversorHTML(emb, l.qtd, l.unit || (l.qtd > 0 ? ((l.total || 0) + (l.desconto || 0)) / l.qtd : 0), l.total); }
   abrirSheet(s);
 }
 
@@ -2277,6 +2308,7 @@ async function salvarNota(st){
       if (l.ean && !p.codigo && codigoLivre(l.ean)) mud.codigo = l.ean;
       if ((p.unidade || 'un') !== l.unidade) { mud.unidade = l.unidade; if (l.unidade === 'kg') mud.medida = 'kg'; }
       if (desc && !(p.descNota || []).includes(desc)) mud.descNota = [...(p.descNota || []), desc].slice(-5);
+      if (l.emb && l.embGuardar && (mud.unidade || p.unidade) !== 'kg') mud.embalagem = {qtd: l.emb.qtd, un: l.emb.un};
       if (Object.keys(mud).length) { p = Object.assign(clone(p), mud); Dados.salvarProduto(p); }
     } else {
       const chave = l.ean || norm(l.nome) + '|' + norm(l.marca);
@@ -2286,13 +2318,14 @@ async function salvarNota(st){
         p = {id: novoId(), nome: capitalizar(String(l.nome).trim()).slice(0, 60), marca: String(l.marca || '').trim().slice(0, 40), tamanho: tam.slice(0, 20), unidade: l.unidade === 'kg' ? 'kg' : 'un',
           categoriaId: catSeExiste(l.categoriaId), codigo: codigoLivre(l.ean) ? l.ean : '', descNota: desc ? [desc] : [], fotoId: null, fotoData: null, criadoEm: Date.now()};
         const med = l.unidade === 'kg' ? 'kg' : medidaDoTamanho(tam); if (med) p.medida = med;
+        if (l.emb && l.embGuardar && l.unidade !== 'kg') p.embalagem = {qtd: l.emb.qtd, un: l.emb.un};
         Dados.salvarProduto(p); novos.set(chave, p);
       } else if (desc && !p.descNota.includes(desc)) { p.descNota = [...p.descNota, desc].slice(-5); Dados.salvarProduto(p); }
     }
     pidDaLinha.set(l, p.id);
     const v = pago.get(l);
     const g = porPid.get(p.id) || {p, qtd: 0, total: 0, units: new Set(), editado: false, manual: true, lq: 0, lt: 0};
-    g.editado = g.editado || linhaEditada(l); g.manual = g.manual && !!l.manual; if (l.lido) { g.lq += l.lido.qtd || 0; g.lt += l.lido.total || 0; }
+    g.editado = g.editado || linhaEditada(l); g.manual = g.manual && !!l.manual; if (l.emb && !g.emb) g.emb = l.emb; if (l.lido) { g.lq += l.lido.qtd || 0; g.lt += l.lido.total || 0; }
     g.p = p; g.qtd += l.qtd; g.total += v; g.units.add(l.unit > 0 && Math.abs(l.unit * l.qtd - v) <= 0.02 ? l.unit : null); porPid.set(p.id, g);
   }
   // itens da lista aberta que vieram na nota (já comprados): saem da lista se o usuário deixou marcado; voltam se a nota for excluída
@@ -2301,7 +2334,7 @@ async function salvarNota(st){
   // guarda a nota: fotos, número, chave, descontos e o lançamento como foi lido (se faltar espaço, guarda sem as fotos)
   const nota = {id: notaId, lugar, cnpj: st.cnpj || '', data: st.data, numero: st.numero || '', serie: st.serie || '', chave: st.chave || '', total, totalNota: st.totalNota || null,
     subtotal: k.bruto, descontoItens: k.descItens, descontoGeral: k.geral, fotos: (st.imagens || []).map(b => 'data:image/jpeg;base64,' + b),
-    itens: [...linhas.map(l => ({numero: l.numero, descricao: l.descricao, pid: pidDaLinha.get(l), qtd: l.qtd, unidade: l.unidade, bruto: r2(l.total + (l.desconto || 0)), desconto: l.desconto || 0, total: pago.get(l), lido: l.lido || null, editado: linhaEditada(l), manual: !!l.manual})),
+    itens: [...linhas.map(l => ({numero: l.numero, descricao: l.descricao, pid: pidDaLinha.get(l), qtd: l.qtd, unidade: l.unidade, bruto: r2(l.total + (l.desconto || 0)), desconto: l.desconto || 0, total: pago.get(l), lido: l.lido || null, editado: linhaEditada(l), manual: !!l.manual, emb: l.emb || null})),
       ...st.itens.filter(l => !l.incluir && !l.manual).map(l => ({numero: l.numero, descricao: l.descricao, pid: l.alvo || null, qtd: l.qtd, unidade: l.unidade, bruto: r2((l.total || 0) + (l.desconto || 0)), desconto: l.desconto || 0, total: 0, lido: l.lido || null, excluido: true}))],
     criados: [...novos.values()].map(p => p.id), naListaAntes: [], tiradosDaLista: tirados, criadaEm: Date.now()};
   let semFotos = false; esquecerLinhasNotas();
@@ -2312,7 +2345,8 @@ async function salvarNota(st){
     const impresso = g.units.size === 1 ? [...g.units][0] : null;
     return {pid: g.p.id, nome: g.p.nome, marca: g.p.marca || '', categoriaId: catDoProduto(g.p), unidade: g.p.unidade || 'un', qtd: r3(g.qtd), preco: impresso || Math.round(g.total / g.qtd * 10000) / 10000,
       comprado: true, compradoEm: quando, local: lugar, obs: null, sugestao: null, notaId,
-      ...(g.editado ? {editado: true, orig: {qtd: r3(g.lq), preco: g.lq > 0 ? Math.round(g.lt / g.lq * 10000) / 10000 : null}} : {}), ...(g.manual ? {manual: true} : {})};
+      ...(g.editado ? {editado: true, orig: {qtd: r3(g.lq), preco: g.lq > 0 ? Math.round(g.lt / g.lq * 10000) / 10000 : null}} : {}), ...(g.manual ? {manual: true} : {}),
+      ...(g.emb && g.p.unidade !== 'kg' ? {emb: {qtd: g.emb.qtd, un: g.emb.un}} : {})};
   });
   const compraId = novoId();
   Dados.salvarCompra({id: compraId, status: 'finalizada', mercado: lugar, orcamento: null, criadaEm: quando, finalizadaEm: quando, total, itens, origem: 'nota'});
@@ -2823,14 +2857,15 @@ let _linhasNotas = null, _carregandoNotas = null;
 function carregarLinhasNotas(){
   if (_linhasNotas) return Promise.resolve(_linhasNotas);
   if (!_carregandoNotas) _carregandoNotas = BD.todos('notas').catch(() => []).then(notas => {
-    const porPid = new Map(), porNotaPid = new Map();
+    const porPid = new Map(), porNotaPid = new Map(), cheioNotaPid = new Map();
     for (const n of notas) for (const i of n.itens || []) {
       if (!i || typeof i.pid !== 'string') continue;
       const d = String(i.descricao || '').slice(0, 80);
       if (!porPid.has(i.pid)) porPid.set(i.pid, []); porPid.get(i.pid).push(norm(d));
       porNotaPid.set(n.id + '|' + i.pid, d);
+      if (!i.excluido && Number(i.bruto) > 0 && Number(i.qtd) > 0) cheioNotaPid.set(n.id + '|' + i.pid, Number(i.bruto) / Number(i.qtd));
     }
-    _linhasNotas = {porPid, porNotaPid}; _carregandoNotas = null; return _linhasNotas;
+    _linhasNotas = {porPid, porNotaPid, cheioNotaPid}; _carregandoNotas = null; return _linhasNotas;
   });
   return _carregandoNotas;
 }
@@ -2889,9 +2924,54 @@ function lerEmbalagem(texto){
 }
 const EMB_ROTULO = {un: 'unidades', kg: 'kg', L: 'litros'};
 const embTexto = e => e ? `${String(e.qtd).replace('.', ',')} ${e.un === 'un' ? (e.qtd === 1 ? 'unidade' : 'unidades') : e.un === 'kg' ? 'kg' : (e.qtd === 1 ? 'litro' : 'litros')}` : '';
-/** Embalagem de uma compra: a lida na nota daquela compra; senão a do cadastro do produto. */
+/* ---------- Conversor de unidades e medida (tamanho da embalagem → total e preço por unidade) ---------- */
+const UN_CAMPO = [['un', 'unidades'], ['g', 'g'], ['kg', 'kg'], ['ml', 'ml'], ['L', 'litros']];
+/** Embalagem digitada (número + un/g/kg/ml/L) → {qtd, un} em un, kg ou L; null se inválida. */
+function embDeCampo(v, u){
+  const n = parseNum(v); if (!(n > 0) || n > 5000) return null;
+  if (u === 'g') return {qtd: r3(n / 1000), un: 'kg'};
+  if (u === 'ml') return {qtd: r3(n / 1000), un: 'L'};
+  if (u === 'kg' || u === 'L') return {qtd: r3(n), un: u};
+  return n >= 1 ? {qtd: Math.round(n), un: 'un'} : null;
+}
+/** {qtd, un} → [número, unidade] para o campo (abaixo de 1 kg ou 1 L mostra em g ou ml). */
+function embParaCampo(e){
+  if (!e || !(e.qtd > 0)) return ['', 'un'];
+  if (e.un === 'kg' && e.qtd < 1) return [String(r3(e.qtd * 1000)).replace('.', ','), 'g'];
+  if (e.un === 'L' && e.qtd < 1) return [String(r3(e.qtd * 1000)).replace('.', ','), 'ml'];
+  return [String(e.qtd).replace('.', ','), e.un];
+}
+/** Quantidade com a medida: "150 un", "1,5 kg", "2 L". */
+const qtdMedida = (q, un) => `${(Math.round(q * 1000) / 1000).toLocaleString('pt-BR', {maximumFractionDigits: 3})} ${un}`;
+/** A conta do conversor: embalagens × conteúdo = total; preço pago e preço cheio por unidade. */
+function contaConversorHTML(emb, qtdEmb, precoCheio, totalPago){
+  if (!emb) return 'Informe quanto vem em cada embalagem para ver o total e o preço por unidade.';
+  const total = emb.qtd * qtdEmb, rot = emb.un === 'un' ? 'unidade' : emb.un === 'kg' ? 'kg' : 'litro';
+  const pago = total > 0 && totalPago > 0 ? totalPago / total : null, cheio = precoCheio > 0 ? precoCheio / emb.qtd : null;
+  const l = [`<b>${esc(String(r3(qtdEmb)).replace('.', ','))} ${qtdEmb === 1 ? 'embalagem' : 'embalagens'} × ${esc(qtdMedida(emb.qtd, emb.un))} = ${esc(qtdMedida(total, emb.un))}</b>`];
+  if (pago) l.push(`Pago: ${fmt(totalPago)}${qtdEmb > 1 ? ` → ${fmt(totalPago / qtdEmb)} a embalagem` : ''} → <b>${fmtPorUn(pago)} por ${rot}</b>`);
+  if (cheio && (!pago || cheio - pago > 0.005)) l.push(`Preço cheio: ${fmt(precoCheio)} a embalagem → ${fmtPorUn(cheio)} por ${rot}`);
+  return l.join('<br>');
+}
+/** Bloco do conversor: número + unidade, conta ao vivo e "guardar no cadastro do produto". */
+function conversorHTML(pre, emb, guardar){
+  const [v, u] = embParaCampo(emb);
+  return `<span class="rot">Conversor: cada embalagem tem</span><div class="campo-linha"><input id="${pre}EmbQ" class="campo" inputmode="decimal" value="${esc(v)}" placeholder="Ex.: 50" autocomplete="off"><select id="${pre}EmbU" class="campo" style="flex:0 0 120px" aria-label="Unidade da embalagem">${UN_CAMPO.map(([k, r]) => `<option value="${k}" ${u === k ? 'selected' : ''}>${r}</option>`).join('')}</select></div>
+    <div class="conversor" id="${pre}Conta"></div>
+    <label class="sw" style="margin-top:8px"><input type="checkbox" id="${pre}EmbG" ${guardar ? 'checked' : ''}><span></span>Guardar no cadastro do produto (vale para as próximas compras)</label>`;
+}
+/** Liga o conversor: digitar o tamanho atualiza a conta; aoMudar(emb, guardar) recebe o valor. */
+function ligarConversor(el, pre, getEmb, setEmb, contar){
+  const q = el.querySelector('#' + pre + 'EmbQ'), u = el.querySelector('#' + pre + 'EmbU'), g = el.querySelector('#' + pre + 'EmbG');
+  if (!q) return;
+  const mudou = () => { setEmb(embDeCampo(q.value, u.value), g ? g.checked : false); contar(); };
+  q.addEventListener('input', mudou); u.addEventListener('change', mudou); if (g) g.addEventListener('change', mudou);
+  contar();
+}
+/** Embalagem de uma compra: a informada na compra; senão a lida na nota daquela compra; senão a do cadastro do produto. */
 function embalagemDaCompra(pid, x){
   const c = Dados.compras.get(x.compraId); const it = c && (c.itens || []).find(i => i.pid === pid);
+  if (it && it.emb && it.emb.qtd > 0) return Object.assign({origem: 'compra'}, it.emb);
   const desc = it && it.notaId && _linhasNotas ? _linhasNotas.porNotaPid.get(it.notaId + '|' + pid) : null;
   const daNota = desc ? lerEmbalagem(desc) : null; if (daNota) return Object.assign({origem: 'nota'}, daNota);
   const p = Dados.produtos.get(pid); return p && p.embalagem && p.embalagem.qtd > 0 ? Object.assign({origem: 'produto'}, p.embalagem) : null;
@@ -2900,7 +2980,10 @@ function embalagemDaCompra(pid, x){
 function precoUnitario(pid, x){
   const p = Dados.produtos.get(pid); if (p && p.unidade === 'kg') return null;
   const e = embalagemDaCompra(pid, x); if (!e || !(e.qtd > 0)) return null;
-  return {valor: x.preco / e.qtd, un: e.un, emb: e};
+  // preço cheio (antes do desconto) por embalagem, quando a nota mostra um valor maior que o pago
+  const c = Dados.compras.get(x.compraId), it = c && (c.itens || []).find(i => i.pid === pid);
+  const cheioEmb = it && it.notaId && _linhasNotas ? _linhasNotas.cheioNotaPid.get(it.notaId + '|' + pid) : null;
+  return {valor: x.preco / e.qtd, un: e.un, emb: e, cheio: cheioEmb && cheioEmb - x.preco > 0.005 ? cheioEmb / e.qtd : null};
 }
 /** Preço por unidade: 2 casas (R$ 0,96); 4 casas só abaixo de R$ 0,10. */
 const fmtPorUn = v => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: v < 0.1 ? 4 : 2});
@@ -2944,9 +3027,9 @@ async function abrirHistoricoProduto(pid){
       // sugestão de embalagem lida na nota mais recente, se o cadastro ainda não tem
       const sug = p && p.unidade !== 'kg' && !(p.embalagem && p.embalagem.qtd > 0) ? (cs.map(x => embalagemDaCompra(pid, x)).find(e => e && e.origem === 'nota') || lerEmbalagem(p.tamanho)) : null;
       const emb = p && p.embalagem && p.embalagem.qtd > 0 ? p.embalagem : null;
-      const linhas = cs.slice(0, 30).map(x => `<button class="compra-linha" data-a="hist-compra" data-id="${esc(x.compraId)}"><span><b>${fmtData(x.data)}</b><small>${esc(x.mercado || 'sem lugar')} · ${esc(fmtQtd(x.qtd, p ? p.unidade : 'un'))}${x.finalizada ? '' : ' · no carrinho'}</small></span><span style="text-align:right"><b>${fmt(x.preco)}</b>${x.un ? `<small>${esc(porUnTexto(x.un))}${x.un.emb.origem === 'nota' ? ` · ${esc(embTexto(x.un.emb))} na nota` : ''}</small>` : ''}</span></button>`).join('');
+      const linhas = cs.slice(0, 30).map(x => `<button class="compra-linha" data-a="hist-compra" data-id="${esc(x.compraId)}"><span><b>${fmtData(x.data)}</b><small>${esc(x.mercado || 'sem lugar')} · ${esc(fmtQtd(x.qtd, p ? p.unidade : 'un'))}${x.finalizada ? '' : ' · no carrinho'}</small></span><span style="text-align:right"><b>${fmt(x.preco)}</b>${x.un ? `<small>${esc(porUnTexto(x.un))}${x.un.cheio ? ` (cheio ${esc(fmtPorUn(x.un.cheio))})` : ''}${x.un.emb.origem !== 'produto' ? ` · ${esc(embTexto(x.un.emb))} ${x.un.emb.origem === 'nota' ? 'na nota' : 'na compra'}` : ''}</small>` : ''}</span></button>`).join('');
       return `<div class="cab-prod">${thumbHTML(p, nome)}<div><div class="nome" style="white-space:normal">${esc(nome)}</div><div class="meta">${esc(p ? [p.marca, p.tamanho].filter(Boolean).join(' ') || categoria(catDoProduto(p)).nome : 'Produto excluído do catálogo')}</div></div></div>
-        ${u ? `<div class="resumo-item" style="grid-template-columns:minmax(118px,auto) 1fr"><span>Última compra</span><strong>${fmt(u.preco)}</strong>${u.un ? `<span>Por unidade</span><strong>${esc(porUnCurto(u.un))}</strong>` : ''}<span>Onde</span><strong>${esc(u.mercado || 'sem lugar')}</strong><span>Quando</span><strong>${fmtData(u.data)}</strong>
+        ${u ? `<div class="resumo-item" style="grid-template-columns:minmax(118px,auto) 1fr"><span>Última compra</span><strong>${fmt(u.preco)}</strong>${u.un ? `<span>Por unidade</span><strong>${esc(porUnCurto(u.un))}${u.un.cheio ? `<small style="display:block;font-weight:500;color:var(--muted)">cheio ${esc(porUnCurto({valor: u.un.cheio, un: u.un.un}))}</small>` : ''}</strong>` : ''}<span>Onde</span><strong>${esc(u.mercado || 'sem lugar')}</strong><span>Quando</span><strong>${fmtData(u.data)}</strong>
           <span>Menor ${todosUn ? '(por unidade)' : 'preço'}</span><strong>${todosUn ? esc(porUnCurto(menor.un)) : fmt(menor.preco)}<small style="display:block;font-weight:500;color:var(--muted)">${esc(menor.mercado || '')}, ${fmtData(menor.data)}</small></strong>
           <span>Preço médio${todosUn ? ' (por unidade)' : ''}</span><strong>${todosUn ? esc(porUnCurto({valor: media, un: u.un.un})) : fmt(media)}</strong></div>` : '<div class="contagem" style="margin-top:10px">Ainda não há compras deste produto.</div>'}
         ${sug ? `<div class="aviso">A nota indica <b>${esc(embTexto(sug))}</b> por embalagem. Usar para calcular o preço por unidade das compras sem essa informação? <button class="btn texto" data-a="hist-usar-emb">Usar</button></div>` : ''}
@@ -2976,7 +3059,7 @@ async function abrirHistoricoProduto(pid){
 function textoCompartilhar(pid){
   const p = Dados.produtos.get(pid), cs = comprasDoProduto(pid), u = cs[0]; if (!u) return nomeDoPid(pid);
   const nome = nomeDoPid(pid) + (p && p.marca && !norm(nomeDoPid(pid)).includes(norm(p.marca)) ? ` (${p.marca})` : '');
-  const linhas = [nome, `Última compra: ${fmt(u.preco)}${u.un ? ` (${porUnTexto(u.un)}${u.un.un === 'un' ? `, ${embTexto(u.un.emb)}` : ''})` : ''}`, `Onde: ${u.mercado || 'sem lugar'}, em ${fmtData(u.data)}`];
+  const linhas = [nome, `Última compra: ${fmt(u.preco)}${u.un ? ` (${porUnTexto(u.un)}${u.un.un === 'un' ? `, ${embTexto(u.un.emb)}` : ''}${u.un.cheio ? `; preço cheio ${porUnTexto({valor: u.un.cheio, un: u.un.un})}` : ''})` : ''}`, `Onde: ${u.mercado || 'sem lugar'}, em ${fmtData(u.data)}`];
   return linhas.join('\n').replace(/ /g, ' ');
 }
 
@@ -3894,13 +3977,14 @@ function historicoHTML(compras){
 /** Detalhe de uma compra finalizada. */
 async function abrirCompra(id){
   const c = Dados.compras.get(id); if (!c) return;
+  await carregarLinhasNotas();
   const ids = [...new Set(c.itens.map(i => i.notaId).filter(Boolean))];
   let notas = []; try { notas = (await Promise.all(ids.map(n => BD.ler('notas', n)))).filter(Boolean); } catch {}
   const notaDe = b => notas.find(n => n.id === b.dataset.id);
   abrirSheet({
     titulo: 'Compra de ' + fmtData(c.finalizadaEm),
     html: () => `<div class="kv"><span>Mercado</span><b>${esc(c.mercado || 'Sem mercado')}</b><span>Total</span><b>${fmt(c.total ?? totais(c).gasto)}</b>${c.orcamento ? `<span>Orçamento</span><b>${fmt(c.orcamento)}</b>` : ''}</div>
-      <div class="tabela-wrap" style="margin-top:12px"><table class="tab"><thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Preço</th><th class="num">Subtotal</th></tr></thead><tbody>${c.itens.map(it => `<tr><td>${esc(nomeItem(it))}${it.editado ? ' <span class="badge alerta">editado</span>' : ''}${it.manual ? ' <span class="badge">adicionado</span>' : ''}</td><td class="num">${esc(fmtQtd(it.qtd, unidadeItem(it)))}</td><td class="num">${fmt(it.preco)}</td><td class="num">${fmt(it.qtd * it.preco)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="tabela-wrap" style="margin-top:12px"><table class="tab"><thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Preço</th><th class="num">Subtotal</th></tr></thead><tbody>${c.itens.map(it => `<tr><td>${esc(nomeItem(it))}${it.editado ? ' <span class="badge alerta">editado</span>' : ''}${it.manual ? ' <span class="badge">adicionado</span>' : ''}${(u => u ? `<br><small>${esc(qtdMedida(u.emb.qtd * it.qtd, u.un))} · ${esc(porUnCurto(u))}${u.cheio ? ` (cheio ${esc(porUnCurto({valor: u.cheio, un: u.un}))})` : ''}</small>` : '')(precoUnitario(it.pid, {compraId: c.id, preco: it.preco}))}</td><td class="num">${esc(fmtQtd(it.qtd, unidadeItem(it)))}</td><td class="num">${fmt(it.preco)}</td><td class="num">${fmt(it.qtd * it.preco)}</td></tr>`).join('')}</tbody></table></div>
       ${(e => e.length ? `<details style="margin-top:8px"><summary>Ver valores originais (${e.length} ${e.length === 1 ? 'item editado' : 'itens editados'})</summary>${e.map(it => `<div class="contagem">${esc(nomeItem(it))}: ${esc(fmtQtd(it.orig.qtd, unidadeItem(it)))} × ${it.orig.preco ? fmt(it.orig.preco) : '?'}${it.orig.pid && it.orig.pid !== it.pid ? ' (era ' + esc(nomeDoPid(it.orig.pid)) + ')' : ''} → agora ${esc(fmtQtd(it.qtd, unidadeItem(it)))} × ${fmt(it.preco)}</div>`).join('')}</details>` : '')(c.itens.filter(it => it.editado && it.orig))}
       <div class="sheet-acoes"><button class="btn sec" data-a="editar-itens">Editar itens</button></div>
       ${notas.map(notaHTML).join('')}
@@ -4175,7 +4259,7 @@ async function restaurarBackup(arq){
     descNota: Array.isArray(p.descNota) ? p.descNota.filter(d => typeof d === 'string').slice(-5).map(d => d.slice(0, 80)) : [],
     comparacoes: Array.isArray(p.comparacoes) ? p.comparacoes.slice(-40).filter(r => r && Number(r.unit) > 0 && MEDIDAS[r.medida]).map(r => ({em: Number(r.em) || 0, lugar: str(r.lugar, 40), medida: r.medida, marca: str(r.marca, 40), preco: Number(r.preco) || 0, qtdEmb: Number(r.qtdEmb) || 1, tam: Number(r.tam) || 0, sub: str(r.sub, 10), promo: str(r.promo, 10), unit: Number(r.unit)})) : []}));
   const temAberta = !!compraAberta();
-  const item = it => ({pid: str(it.pid, 60), nome: str(it.nome, 60), marca: str(it.marca, 40), categoriaId: typeof it.categoriaId === 'string' ? it.categoriaId.slice(0, 60) : null, unidade: it.unidade === 'kg' ? 'kg' : 'un', qtd: Number(it.qtd) > 0 ? Number(it.qtd) : null, preco: Number(it.preco) > 0 ? Number(it.preco) : null, comprado: !!it.comprado, obs: str(it.obs, 80) || null, sugestao: str(it.sugestao, 40) || null, local: str(it.local, 40) || null, marcaCompra: str(it.marcaCompra, 40) || null, ...(it.compradoEm ? {compradoEm: Number(it.compradoEm)} : {}), ...(it.editado ? {editado: true} : {}), ...(it.manual ? {manual: true} : {}),
+  const item = it => ({pid: str(it.pid, 60), nome: str(it.nome, 60), marca: str(it.marca, 40), categoriaId: typeof it.categoriaId === 'string' ? it.categoriaId.slice(0, 60) : null, unidade: it.unidade === 'kg' ? 'kg' : 'un', qtd: Number(it.qtd) > 0 ? Number(it.qtd) : null, preco: Number(it.preco) > 0 ? Number(it.preco) : null, comprado: !!it.comprado, obs: str(it.obs, 80) || null, sugestao: str(it.sugestao, 40) || null, local: str(it.local, 40) || null, marcaCompra: str(it.marcaCompra, 40) || null, ...(it.compradoEm ? {compradoEm: Number(it.compradoEm)} : {}), ...(it.emb && Number(it.emb.qtd) > 0 && Number(it.emb.qtd) <= 5000 && ['un', 'kg', 'L'].includes(it.emb.un) ? {emb: {qtd: Number(it.emb.qtd), un: it.emb.un}} : {}), ...(it.editado ? {editado: true} : {}), ...(it.manual ? {manual: true} : {}),
     ...(it.orig && Number(it.orig.qtd) > 0 ? {orig: Object.assign({qtd: Number(it.orig.qtd), preco: Number(it.orig.preco) > 0 ? Number(it.orig.preco) : null}, typeof it.orig.pid === 'string' ? {pid: str(it.orig.pid, 60)} : {})} : {}), ...(typeof it.notaId === 'string' && /^n[\w-]{1,60}$/.test(it.notaId) ? {notaId: it.notaId} : {})});
   const compras = o.compras.filter(c => c && typeof c.id === 'string' && /^[\w-]{1,60}$/.test(c.id) && Array.isArray(c.itens) && (c.status === 'finalizada' || (c.status === 'aberta' && !temAberta))).map(c => ({
     id: c.id, status: c.status, mercado: str(c.mercado, 40), orcamento: Number(c.orcamento) > 0 ? Number(c.orcamento) : null, criadaEm: Number(c.criadaEm) || Date.now(),
@@ -4193,7 +4277,7 @@ async function restaurarBackup(arq){
         criados: Array.isArray(n.criados) ? n.criados.filter(x => typeof x === 'string').map(x => x.slice(0, 60)) : [],
         tiradosDaLista: Array.isArray(n.tiradosDaLista) ? n.tiradosDaLista.filter(i => i && typeof i.pid === 'string').slice(0, 300).map(item) : [], naListaAntes: Array.isArray(n.naListaAntes) ? n.naListaAntes.filter(x => typeof x === 'string').map(x => x.slice(0, 60)) : [],
         itens: (Array.isArray(n.itens) ? n.itens : []).slice(0, 300).filter(i => i && typeof i === 'object').map(i => ({numero: Number.isInteger(i.numero) ? i.numero : null, descricao: str(i.descricao, 80), pid: str(i.pid, 60), qtd: Number(i.qtd) || 0, unidade: i.unidade === 'kg' ? 'kg' : 'un', bruto: Number(i.bruto) || 0, desconto: Number(i.desconto) || 0, total: Number(i.total) || 0,
-          lido: i.lido && typeof i.lido === 'object' ? {qtd: Number(i.lido.qtd) || null, unit: Number(i.lido.unit) || null, total: Number(i.lido.total) || null, desconto: Number(i.lido.desconto) || 0} : null, editado: !!i.editado, excluido: !!i.excluido, manual: !!i.manual}))});
+          lido: i.lido && typeof i.lido === 'object' ? {qtd: Number(i.lido.qtd) || null, unit: Number(i.lido.unit) || null, total: Number(i.lido.total) || null, desconto: Number(i.lido.desconto) || 0} : null, editado: !!i.editado, excluido: !!i.excluido, manual: !!i.manual, emb: i.emb && Number(i.emb.qtd) > 0 && Number(i.emb.qtd) <= 5000 && ['un', 'kg', 'L'].includes(i.emb.un) ? {qtd: Number(i.emb.qtd), un: i.emb.un} : null}))});
     }
     if (o.cfg && Array.isArray(o.cfg.categorias)) Dados.salvarCfg(c => {
       for (const k of o.cfg.categorias) if (k && typeof k.id === 'string' && typeof k.nome === 'string' && !c.categorias.some(x => x.id === k.id)) c.categorias.push({id: k.id.slice(0, 60), nome: k.nome.slice(0, 30), cor: /^#[0-9a-fA-F]{6}$/.test(k.cor) ? k.cor : CORES[0]});
